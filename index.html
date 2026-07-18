@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#171923">
+  <title>Pathfinder 2e GM Combat Tracker</title>
+  <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <h1>Pathfinder 2e GM Tracker</h1>
+      <p>Encounter, initiative, combat, spell, and treasure management.</p>
+    </div>
+    <div class="header-actions">
+      <button id="newEncounterBtn" type="button">New Encounter</button>
+      <button id="saveBtn" type="button">Save</button>
+      <button id="exportBtn" type="button">Export JSON</button>
+      <label class="button-like" for="importInput">Import JSON</label>
+      <input id="importInput" type="file" accept=".json,application/json">
+    </div>
+  </header>
+
+  <nav class="tabs" aria-label="Main sections">
+    <button class="tab active" data-tab="encounter" type="button">Encounter</button>
+    <button class="tab" data-tab="combatant" type="button">Combatant Editor</button>
+    <button class="tab" data-tab="compendium" type="button">Compendium</button>
+    <button class="tab" data-tab="notes" type="button">Notes & Treasure</button>
+  </nav>
+
+  <main>
+    <section id="encounterTab" class="tab-panel active">
+      <div class="toolbar card">
+        <label>
+          Saved encounter
+          <select id="encounterSelect"></select>
+        </label>
+        <label>
+          Encounter name
+          <input id="encounterName" type="text" maxlength="80">
+        </label>
+        <div class="round-controls">
+          <button id="prevTurnBtn" type="button">Previous</button>
+          <div><strong>Round <span id="roundValue">1</span></strong><br><span id="turnLabel">No active combatant</span></div>
+          <button id="nextTurnBtn" type="button">Next Turn</button>
+        </div>
+        <button id="sortInitiativeBtn" type="button">Sort Initiative</button>
+        <button id="duplicateEncounterBtn" type="button">Duplicate</button>
+        <button id="deleteEncounterBtn" class="danger" type="button">Delete</button>
+      </div>
+
+      <div class="quick-roll card">
+        <h2>Quick Dice Roller</h2>
+        <div class="inline-fields">
+          <label>Dice <input id="quickDice" type="text" value="1d20+0" aria-label="Dice expression"></label>
+          <button id="quickRollBtn" type="button">Roll</button>
+          <output id="quickRollOutput" aria-live="polite">Enter a roll such as 1d20+7 or 2d6+4.</output>
+        </div>
+      </div>
+
+      <div id="initiativeList" class="initiative-list"></div>
+      <button id="addCombatantBtn" class="floating-add" type="button">+ Add Combatant</button>
+    </section>
+
+    <section id="combatantTab" class="tab-panel">
+      <div class="editor-layout">
+        <aside class="card">
+          <h2>Combatants</h2>
+          <div id="combatantPicker" class="combatant-picker"></div>
+        </aside>
+
+        <section class="card editor-card">
+          <div class="section-heading">
+            <h2>Combatant Editor</h2>
+            <button id="deleteCombatantBtn" class="danger" type="button">Delete Combatant</button>
+          </div>
+
+          <div class="form-grid">
+            <label>Name <input id="cName" type="text"></label>
+            <label>Type
+              <select id="cType">
+                <option>Player</option>
+                <option>Creature</option>
+                <option>NPC</option>
+                <option>Hazard</option>
+              </select>
+            </label>
+            <label>Level <input id="cLevel" type="number" value="1"></label>
+            <label>Initiative <input id="cInitiative" type="number" value="0"></label>
+            <label>Max HP <input id="cMaxHp" type="number" min="0" value="10"></label>
+            <label>Current HP <input id="cHp" type="number" min="0" value="10"></label>
+            <label>Temporary HP <input id="cTempHp" type="number" min="0" value="0"></label>
+            <label>Armor Class <input id="cAc" type="number" value="10"></label>
+            <label>Fortitude <input id="cFort" type="number" value="0"></label>
+            <label>Reflex <input id="cRef" type="number" value="0"></label>
+            <label>Will <input id="cWill" type="number" value="0"></label>
+            <label>Perception <input id="cPerception" type="number" value="0"></label>
+            <label>Maximum actions <input id="cMaxActions" type="number" min="0" max="12" value="3"></label>
+            <label>Spell attack <input id="cSpellAttack" type="number" value="0"></label>
+            <label>Spell DC <input id="cSpellDc" type="number" value="10"></label>
+          </div>
+
+          <div class="section-block">
+            <h3>Defenses and Conditions</h3>
+            <div class="form-grid">
+              <label>Resistances <input id="cResistances" type="text" placeholder="fire 5, physical 3"></label>
+              <label>Weaknesses <input id="cWeaknesses" type="text" placeholder="cold 5"></label>
+              <label>Immunities <input id="cImmunities" type="text" placeholder="poison, disease"></label>
+              <label>Conditions <input id="cConditions" type="text" placeholder="frightened 1, off-guard"></label>
+              <label>Persistent damage <input id="cPersistent" type="text" placeholder="1d6 fire, DC 15 flat check"></label>
+            </div>
+          </div>
+
+          <div class="section-block">
+            <div class="section-heading">
+              <h3>Attacks</h3>
+              <button id="addAttackBtn" type="button">Add Attack</button>
+            </div>
+            <div id="attackEditor"></div>
+          </div>
+
+          <div class="section-block">
+            <div class="section-heading">
+              <h3>Spells</h3>
+              <button id="addSpellBtn" type="button">Add Spell</button>
+            </div>
+            <div id="spellEditor"></div>
+          </div>
+
+          <div class="section-block">
+            <h3>Spell Slots</h3>
+            <div id="slotEditor" class="slot-grid"></div>
+          </div>
+
+          <div class="section-block">
+            <label>Combatant notes
+              <textarea id="cNotes" rows="5"></textarea>
+            </label>
+          </div>
+
+          <button id="applyCombatantBtn" class="primary" type="button">Apply Changes</button>
+        </section>
+      </div>
+    </section>
+
+    <section id="compendiumTab" class="tab-panel">
+      <div class="card">
+        <div class="section-heading">
+          <div>
+            <h2>Rules Compendium</h2>
+            <p class="muted">This starter includes sample entries. Add licensed data to the JSON files in the data folder.</p>
+          </div>
+          <button id="addHomebrewBtn" type="button">Add Homebrew Entry</button>
+        </div>
+        <div class="form-grid compact">
+          <label>Search <input id="compendiumSearch" type="search" placeholder="Search names, traits, or descriptions"></label>
+          <label>Category
+            <select id="compendiumCategory">
+              <option value="all">All</option>
+              <option value="action">Actions</option>
+              <option value="spell">Spells</option>
+              <option value="creature">Creatures</option>
+              <option value="hazard">Hazards</option>
+              <option value="loot">Loot</option>
+              <option value="condition">Conditions</option>
+              <option value="rune">Runes</option>
+            </select>
+          </label>
+        </div>
+        <div id="compendiumResults" class="compendium-results"></div>
+      </div>
+    </section>
+
+    <section id="notesTab" class="tab-panel">
+      <div class="notes-layout">
+        <section class="card">
+          <h2>Encounter Notes</h2>
+          <textarea id="encounterNotes" rows="16" placeholder="Tactics, reminders, environmental effects, story notes..."></textarea>
+        </section>
+        <section class="card">
+          <div class="section-heading">
+            <h2>Treasure and Loot</h2>
+            <button id="addLootBtn" type="button">Add Loot</button>
+          </div>
+          <div id="lootList"></div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="homebrewDialog">
+    <div class="dialog-content">
+      <h2>Add Homebrew Compendium Entry</h2>
+      <div class="form-grid">
+        <label>Name <input id="hbName" type="text"></label>
+        <label>Category
+          <select id="hbCategory">
+            <option value="action">Action</option>
+            <option value="spell">Spell</option>
+            <option value="creature">Creature</option>
+            <option value="hazard">Hazard</option>
+            <option value="loot">Loot</option>
+            <option value="condition">Condition</option>
+            <option value="rune">Rune</option>
+          </select>
+        </label>
+        <label>Level <input id="hbLevel" type="number" value="0"></label>
+        <label>Traits <input id="hbTraits" type="text" placeholder="comma separated"></label>
+      </div>
+      <label>Description <textarea id="hbDescription" rows="7"></textarea></label>
+      <div class="dialog-actions">
+        <button id="cancelHomebrewBtn" type="button">Cancel</button>
+        <button id="saveHomebrewBtn" class="primary" type="button">Save Entry</button>
+      </div>
+    </div>
+  </dialog>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script src="js/app.js"></script>
+</body>
+</html>
