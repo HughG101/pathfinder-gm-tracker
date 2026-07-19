@@ -471,6 +471,45 @@ $("cloudDownloadBtn").onclick=async()=>{
  }catch(error){$("cloudStatus").textContent=`Cloud download failed: ${error.message}`}
 };
 
+
+function parseStatBlock(text){
+ const raw=String(text||"").replace(/\r/g,"").trim();if(!raw)throw Error("Paste a stat block first.");
+ const lines=raw.split("\n").map(x=>x.trim()).filter(Boolean),first=lines[0]||"Imported Combatant";
+ const header=first.match(/^(.+?)(?:\s+(CREATURE|NPC|HAZARD)\s+(-?\d+))?$/i);
+ const c=defaultCombatant(header?.[1]?.trim()||"Imported Combatant");
+ c.type=header?.[2]?header[2][0].toUpperCase()+header[2].slice(1).toLowerCase():"Creature";
+ c.level=Number(header?.[3]??raw.match(/\bLevel\s+(-?\d+)/i)?.[1]??1);
+ const number=(rx,f=0)=>{const m=raw.match(rx);return m?Number(m[1]):f};
+ c.perception=number(/Perception\s*([+-]?\d+)/i);c.ac=number(/\bAC\s*(\d+)/i,10);c.maxHp=number(/\bHP\s*(\d+)/i,10);c.hp=c.maxHp;
+ c.fort=number(/\bFort(?:itude)?\s*([+-]?\d+)/i);c.ref=number(/\bRef(?:lex)?\s*([+-]?\d+)/i);c.will=number(/\bWill\s*([+-]?\d+)/i);
+ c.spellDc=number(/\b(?:Spell\s+)?DC\s*(\d+)/i,10);c.spellAttack=number(/\b(?:spell\s+)?attack\s*([+-]?\d+)/i);
+ c.senses=(raw.match(/Perception\s*[+-]?\d+\s*;?\s*([^\n]*)/i)?.[1]||"").trim();
+ const lineValue=label=>lines.find(x=>new RegExp("^"+label+"\\b","i").test(x))?.replace(new RegExp("^"+label+"\\s*","i"),"").trim()||"";
+ c.languages=lineValue("Languages");c.speed=lineValue("Speed")||"25 ft.";c.resistances=lineValue("Resistances");c.weaknesses=lineValue("Weaknesses");c.immunities=lineValue("Immunities");
+ const ab=raw.match(/Str\s*([+-]?\d+).*?Dex\s*([+-]?\d+).*?Con\s*([+-]?\d+).*?Int\s*([+-]?\d+).*?Wis\s*([+-]?\d+).*?Cha\s*([+-]?\d+)/is);
+ if(ab)[c.abilities.str,c.abilities.dex,c.abilities.con,c.abilities.int,c.abilities.wis,c.abilities.cha]=ab.slice(1,7).map(Number);
+ const skills=lineValue("Skills");if(skills)c.skills=[...skills.matchAll(/([A-Za-z][A-Za-z ’'-]+?)\s*([+-]\d+)/g)].map(m=>({id:uid(),name:m[1].trim().replace(/,$/,""),modifier:Number(m[2])}));
+ const items=lineValue("Items");if(items)c.items=items.split(/,(?![^()]*\))/).map(x=>x.trim()).filter(Boolean).map(name=>({id:uid(),name,quantity:1,notes:""}));
+ c.attacks=lines.filter(x=>/^(Melee|Ranged)\b/i.test(x)).map(line=>{
+   const kind=line.match(/^(Melee|Ranged)/i)[1],cost=line.match(/\[(\d+)-action\]|\[([123])\]/i),bonus=line.match(/([+-]\d+)/),traits=line.match(/\(([^)]*)\)/)?.[1]||"",damage=line.match(/(\d+d\d+(?:[+-]\d+)?)/i)?.[1]||"1d4";
+   const name=(bonus?line.slice(0,bonus.index):line).replace(/^(Melee|Ranged)\s*/i,"").replace(/\[[^\]]+\]/g,"").trim()||kind+" Attack";
+   const details=line.split(/→|->/)[1]?.trim()||line;
+   return{id:uid(),name,actionCost:Number(cost?.[1]||cost?.[2]||1),attack:Number(bonus?.[1]||0),traits,damage,damageType:(details.match(/\b(bludgeoning|piercing|slashing|fire|cold|electricity|acid|sonic|mental|poison|force|spirit|void|vitality)\b/i)?.[1]||"").toLowerCase(),range:kind.toLowerCase()==="ranged"?(line.match(/range\s*([^,)\n]+)/i)?.[1]?.trim()||"ranged"):"melee",reload:line.match(/reload\s*(\d+)/i)?.[1]||"",ammo:"",special:details};
+ });
+ function section(head,stops){const s=lines.findIndex(x=>x.toLowerCase().startsWith(head.toLowerCase()));if(s<0)return[];const out=[];for(let i=s+1;i<lines.length;i++){if(stops.some(h=>lines[i].toLowerCase().startsWith(h.toLowerCase())))break;out.push(lines[i])}return out}
+ function entries(head,stops,kind){return section(head,stops).filter(x=>/^[-•]/.test(x)||/[–—-]/.test(x)).map(line=>{const clean=line.replace(/^[-•]\s*/,""),parts=clean.split(/\s+[–—-]\s+/),h=parts.shift()||clean,effect=parts.join(" – "),cost=Number(h.match(/\[(\d+)-action\]|\[([123])\]/i)?.[1]||h.match(/\[(\d+)-action\]|\[([123])\]/i)?.[2]||0);return{id:uid(),name:h.replace(/\[[^\]]+\]/g,"").replace(/\([^)]*\)/g,"").trim(),effect,trigger:"",category:kind,cost,traits:h.match(/\(([^)]*)\)/)?.[1]||""}})}
+ c.actions=[...entries("Offensive Abilities",["Spells","Reactions","Automatic Abilities"],"Offensive"),...entries("Actions",["Reactions","Spells"],"Action")].map(x=>({id:x.id,name:x.name,cost:x.cost||1,traits:x.traits,trigger:x.trigger,effect:x.effect}));
+ c.reactions=entries("Reactions",["Speed","Melee","Ranged","Spells"],"Reaction").map(x=>({id:x.id,name:x.name,trigger:x.trigger,effect:x.effect}));
+ c.specialAbilities=[...entries("Interaction Abilities",["Items","AC","Saves","HP"],"Interaction"),...entries("Automatic Abilities",["Reactions","Speed","Melee","Ranged"],"Automatic")].map(x=>({id:x.id,name:x.name,category:x.category,trigger:x.trigger,effect:x.effect}));
+ c.spells=[];for(const m of raw.matchAll(/^(?:•|-)?\s*(?:(\d+)(?:st|nd|rd|th)?|Cantrips?|Focus Spells?(?:\s*\((\d+)\s*FP\))?)\s*:\s*(.+)$/gim)){const rank=m[1]?m[1]:(/cantrip/i.test(m[0])?"Cantrip":m[2]?`Focus ${m[2]}`:"");for(const name of m[3].split(",").map(x=>x.trim()).filter(Boolean))c.spells.push({id:uid(),name,rank,type:/focus/i.test(m[0])?"Focus":"Spell",actionCost:"",effect:""})}
+ c.notes=`Imported from pasted stat block. Review all fields for accuracy.\n\nOriginal text:\n${raw}`;return c;
+}
+let parsedStatBlock=null;
+function statPreview(c){const rows=[["Name",c.name],["Type",c.type],["Level",c.level],["HP",`${c.hp}/${c.maxHp}`],["AC",c.ac],["Perception",`+${c.perception}`],["Saves",`Fort +${c.fort}, Ref +${c.ref}, Will +${c.will}`],["Languages",c.languages||"—"],["Senses",c.senses||"—"],["Skills",c.skills.map(s=>`${s.name} ${s.modifier>=0?"+":""}${s.modifier}`).join(", ")||"—"],["Attacks",c.attacks.map(a=>`${a.name} +${a.attack} (${a.damage})`).join(", ")||"—"],["Actions",c.actions.map(a=>a.name).join(", ")||"—"],["Reactions",c.reactions.map(a=>a.name).join(", ")||"—"],["Abilities",c.specialAbilities.map(a=>a.name).join(", ")||"—"],["Spells",c.spells.map(a=>a.name).join(", ")||"—"]];return rows.map(([l,v])=>`<div class="preview-row"><strong>${esc(l)}</strong><span>${esc(v)}</span></div>`).join("")}
+$("previewStatBlockBtn").onclick=()=>{try{parsedStatBlock=parseStatBlock($("statBlockInput").value);$("statBlockPreview").innerHTML=statPreview(parsedStatBlock)}catch(e){parsedStatBlock=null;$("statBlockPreview").textContent=e.message}};
+$("importStatBlockBtn").onclick=()=>{try{const c=parsedStatBlock||parseStatBlock($("statBlockInput").value);c.id=uid();encounter().combatants.push(c);selectedId=c.id;render();tab("builder");toast(`${c.name} imported. Review it before play.`)}catch(e){toast(e.message)}};
+$("clearStatBlockBtn").onclick=()=>{$("statBlockInput").value="";$("statBlockPreview").textContent="Paste a stat block and select Preview Import.";parsedStatBlock=null};
+
 window.addEventListener("beforeunload",()=>{try{collect();collectNotes();save();saveSimpleInitiative()}catch{}});
 normalizeState();render();previewCreature();$("calculateRunesBtn").click();$("calculateXpBtn").click();
 })();

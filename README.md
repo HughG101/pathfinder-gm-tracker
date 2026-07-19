@@ -38,3 +38,7 @@ Keep the folder structure exactly as shown.
 The creature builder produces suggested, editable statistics. It is not a substitute for reviewing the complete creature-building guidance.
 
 Cloud synchronization requires a private WebDAV-compatible provider that allows CORS requests from your GitHub Pages domain. Credentials are held only in the current page session and are not written into the tracker save.
+
+
+## Version 6 stat block importer
+Paste a PF2e-style stat block, preview recognized fields, and add it to the current encounter. The original text is preserved in combatant notes for manual correction.

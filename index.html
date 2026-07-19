@@ -27,6 +27,7 @@
   <button class="tab" data-tab="builder" type="button">Combatant Builder</button>
   <button class="tab" data-tab="initiative" type="button">Initiative Tracker</button>
   <button class="tab" data-tab="tools" type="button">GM Tools</button>
+  <button class="tab" data-tab="statblock" type="button">Stat Block Importer</button>
   <button class="tab" data-tab="notes" type="button">Notes & Treasure</button>
 </nav>
 
@@ -310,6 +311,16 @@
     </div>
   </section>
 
+  <section id="statblockTab" class="tab-panel">
+    <div class="statblock-layout">
+      <section class="card">
+        <div class="section-heading"><div><h2>Paste a Stat Block</h2><p class="muted">Paste PF2e-style text, preview it, then add it as an editable combatant.</p></div><button id="clearStatBlockBtn" type="button">Clear</button></div>
+        <label>Stat block text<textarea id="statBlockInput" rows="22" placeholder="Paste the full stat block here..."></textarea></label>
+        <div class="tool-buttons"><button id="previewStatBlockBtn" type="button">Preview Import</button><button id="importStatBlockBtn" class="primary" type="button">Add to Encounter</button></div>
+      </section>
+      <section class="card"><h2>Recognized Data</h2><div id="statBlockPreview" class="tool-result statblock-preview" aria-live="polite">Paste a stat block and select Preview Import.</div><p class="muted">Unrecognized text is preserved in the combatant notes.</p></section>
+    </div>
+  </section>
   <section id="notesTab" class="tab-panel">
     <div class="notes-layout">
       <section class="card">
