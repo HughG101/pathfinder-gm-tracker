@@ -10,7 +10,7 @@ function defaultCombatant(name="New Combatant"){
  maxActions:3,actionsUsed:0,reactionUsed:false,focusPoints:0,senses:"",languages:"",fort:0,ref:0,will:0,
  resistances:"",weaknesses:"",immunities:"",conditions:"",persistent:"",
  abilities:{str:0,dex:0,con:0,int:0,wis:0,cha:0},skills:[],items:[],attacks:[],actions:[],reactions:[],specialAbilities:[],
- spellAttack:0,spellDc:10,spells:[],notes:""};
+ spellAttack:0,spellDc:10,spells:[],structuredConditions:[],notes:""};
 }
 function redSunSample(){
  const c=defaultCombatant("Red Sun Illusionist");
@@ -117,16 +117,31 @@ function renderSimpleInitiative(){
 function load(){try{const x=JSON.parse(localStorage.getItem(KEY));if(x?.encounters?.length)return x}catch{} const e=defaultEncounter("Sample Encounter");return{currentEncounterId:e.id,encounters:[e]}}
 function encounter(){let e=state.encounters.find(x=>x.id===state.currentEncounterId);if(!e){e=state.encounters[0];state.currentEncounterId=e.id}return e}
 function combatant(){return encounter().combatants.find(c=>c.id===selectedId)}
+
+function normalizeState(){
+  for(const e of state.encounters||[]){
+    for(const c of e.combatants||[]){
+      if(!Array.isArray(c.structuredConditions))c.structuredConditions=[];
+      if(!Array.isArray(c.attacks))c.attacks=[];
+      if(!Array.isArray(c.actions))c.actions=[];
+      if(!Array.isArray(c.reactions))c.reactions=[];
+      if(!Array.isArray(c.specialAbilities))c.specialAbilities=[];
+      if(!Array.isArray(c.spells))c.spells=[];
+    }
+  }
+}
+
 function save(msg=false){localStorage.setItem(KEY,JSON.stringify(state));if(msg)toast("Saved on this device.")}
 function toast(t){$("toast").textContent=t;$("toast").classList.add("show");clearTimeout(toast.t);toast.t=setTimeout(()=>$("toast").classList.remove("show"),2200)}
 function shortDescription(text,max=150){const value=String(text??"").trim();return value.length>max?value.slice(0,max-1).trimEnd()+"…":value}
 function roll(expr){const m=String(expr).replace(/\s/g,"").match(/^(\d*)d(\d+)([+-]\d+)?$/i);if(!m)throw Error("Use a format such as 1d20+7.");const n=+m[1]||1,s=+m[2],mod=+m[3]||0;if(n<1||n>100||s<2)throw Error("Invalid dice.");const rs=Array.from({length:n},()=>Math.floor(Math.random()*s)+1);return`${expr}: [${rs.join(", ")}]${mod?` ${mod>=0?"+":"-"} ${Math.abs(mod)}`:""} = ${rs.reduce((a,b)=>a+b,0)+mod}`}
-function render(){renderSelect();renderEncounter();renderPicker();renderBuilder();renderNotes();renderSimpleInitiative();save()}
+function render(){normalizeState();renderSelect();renderEncounter();renderPicker();renderBuilder();renderNotes();renderSimpleInitiative();renderConditionTools();save()}
 function renderSelect(){$("encounterSelect").innerHTML=state.encounters.map(e=>`<option value="${e.id}" ${e.id===state.currentEncounterId?"selected":""}>${esc(e.name)}</option>`).join("")}
 function renderEncounter(){
  const e=encounter();$("encounterName").value=e.name;$("roundValue").textContent=e.round;$("turnLabel").textContent=e.combatants[e.turnIndex]?.name||"No active combatant";
  $("initiativeList").innerHTML=e.combatants.length?e.combatants.map((c,i)=>{
  const hpPct=c.maxHp?Math.max(0,Math.min(100,c.hp/c.maxHp*100)):0;
+ const structuredBadges=(c.structuredConditions||[]).map(condition=>`<span class="badge condition-badge">${esc(condition.name)}${condition.value?` ${condition.value}`:""}</span>`).join("");
  const dots=Array.from({length:c.maxActions},(_,j)=>`<button class="action-dot ${j<c.actionsUsed?"used":""}" data-action="${c.id}" data-i="${j}" type="button">${j+1}</button>`).join("");
  const attacks=c.attacks.map((a,j)=>`<button type="button" data-atk="${c.id}" data-ai="${j}">${esc(a.name)} +${a.attack}</button><button type="button" data-dmg="${c.id}" data-ai="${j}">${esc(a.damage)}</button>`).join("");
  const actionList=(c.actions||[]).map(a=>`<div class="ability-summary"><strong>${esc(a.name)}</strong><span class="badge">${Number(a.cost)||0} action${Number(a.cost)===1?"":"s"}</span><p>${esc(shortDescription(a.effect||a.trigger||"No description."))}</p></div>`).join("");
@@ -140,7 +155,7 @@ function renderEncounter(){
    ${String(s.effect||"").trim()?`<p>${esc(shortDescription(s.effect))}</p>`:""}
  </div>`).join("");
  return`<article class="combatant-card ${i===e.turnIndex?"active-turn":""}">
- <div class="combatant-top"><div><div class="combatant-name">${esc(c.name)}</div><span class="badge">${esc(c.type)} · Level ${c.level}</span></div><strong>Init ${c.initiative}</strong><strong>AC ${c.ac}</strong><div class="card-actions"><button data-copy="${c.id}" type="button">Duplicate</button><button data-edit="${c.id}" type="button">Edit</button></div></div>
+ <div class="combatant-top"><div><div class="combatant-name">${esc(c.name)}</div><span class="badge">${esc(c.type)} · Level ${c.level}</span>${structuredBadges}</div><strong>Init ${c.initiative}</strong><strong>AC ${c.ac}</strong><div class="card-actions"><button data-copy="${c.id}" type="button">Duplicate</button><button data-edit="${c.id}" type="button">Edit</button></div></div>
  <div class="hp-bar"><div class="hp-fill" style="width:${hpPct}%"></div></div>
  <div class="combatant-controls"><label>Amount<input data-amount="${c.id}" type="number" value="1" min="0"></label><button data-hurt="${c.id}">Damage</button><button data-heal="${c.id}">Heal</button><button data-temp="${c.id}">Temp HP</button><strong>HP ${c.hp}/${c.maxHp}${c.tempHp?` +${c.tempHp} temp`:""}</strong><button data-save="${c.id}" data-kind="fort">Fort +${c.fort}</button><button data-save="${c.id}" data-kind="ref">Ref +${c.ref}</button><button data-save="${c.id}" data-kind="will">Will +${c.will}</button><button data-per="${c.id}">Perception +${c.perception}</button><button data-react="${c.id}">${c.reactionUsed?"Reaction Used":"Reaction Ready"}</button></div>
  <div class="detail-line">${esc(c.senses)}${c.languages?` · Languages: ${esc(c.languages)}`:""}</div>
@@ -230,7 +245,31 @@ $("encounterName").onchange=e=>{encounter().name=e.target.value.trim()||"Untitle
 $("duplicateEncounterBtn").onclick=()=>{const e=structuredClone(encounter());e.id=uid();e.name+=" Copy";e.combatants.forEach(c=>c.id=uid());state.encounters.push(e);state.currentEncounterId=e.id;selectedId=null;render()};
 $("deleteEncounterBtn").onclick=()=>{if(state.encounters.length===1)return toast("At least one encounter must remain.");state.encounters=state.encounters.filter(e=>e.id!==encounter().id);state.currentEncounterId=state.encounters[0].id;selectedId=null;render()};
 $("sortInitiativeBtn").onclick=()=>{const e=encounter();e.combatants.sort((a,b)=>b.initiative-a.initiative||b.perception-a.perception);e.turnIndex=e.combatants.length?0:-1;render()};
-$("nextTurnBtn").onclick=()=>{const e=encounter();if(!e.combatants.length)return;if(e.turnIndex>=0){const c=e.combatants[e.turnIndex];c.actionsUsed=0;c.reactionUsed=false}e.turnIndex++;if(e.turnIndex>=e.combatants.length){e.turnIndex=0;e.round++}render()};
+$("nextTurnBtn").onclick=()=>{
+ const e=encounter();if(!e.combatants.length)return;
+ if(e.turnIndex>=0){
+   const old=e.combatants[e.turnIndex];
+   const frightened=(old.structuredConditions||[]).find(x=>x.name==="frightened");
+   if(frightened){frightened.value=Math.max(0,(frightened.value||0)-1);if(!frightened.value)old.structuredConditions=old.structuredConditions.filter(x=>x!==frightened)}
+   old.actionsUsed=0;old.reactionUsed=false;
+ }
+ e.turnIndex++;if(e.turnIndex>=e.combatants.length){e.turnIndex=0;e.round++}
+ const current=e.combatants[e.turnIndex];
+ if(current){
+   const slowed=(current.structuredConditions||[]).find(x=>x.name==="slowed")?.value||0;
+   const stunned=(current.structuredConditions||[]).find(x=>x.name==="stunned");
+   const quickened=(current.structuredConditions||[]).find(x=>x.name==="quickened")?.value?1:0;
+   let lost=slowed;
+   if(stunned){
+     const stunnedLost=Math.min(current.maxActions+quickened,stunned.value||0);
+     lost=Math.max(lost,stunnedLost);
+     stunned.value=Math.max(0,(stunned.value||0)-stunnedLost);
+     if(!stunned.value)current.structuredConditions=current.structuredConditions.filter(x=>x!==stunned);
+   }
+   current.actionsUsed=Math.min(current.maxActions+quickened,lost);
+ }
+ render()
+};
 $("prevTurnBtn").onclick=()=>{const e=encounter();if(!e.combatants.length)return;e.turnIndex--;if(e.turnIndex<0){e.turnIndex=e.combatants.length-1;e.round=Math.max(1,e.round-1)}render()};
 $("quickRollBtn").onclick=()=>{try{$("quickRollOutput").textContent=roll($("quickDice").value)}catch(e){$("quickRollOutput").textContent=e.message}};
 $("quickDice").onkeydown=e=>{if(e.key==="Enter")$("quickRollBtn").click()};
@@ -286,6 +325,152 @@ $("resetSimpleInitiativeBtn").onclick=()=>{
   renderSimpleInitiative();
 };
 
+
+const CREATURE_TABLES={
+ levels:Array.from({length:26},(_,i)=>i-1),
+ ac:{
+  extreme:[18,19,19,21,22,24,25,27,28,30,31,33,34,36,37,39,40,42,43,45,46,48,49,51,52,54],
+  high:[15,16,16,18,19,21,22,24,25,27,28,30,31,33,34,36,37,39,40,42,43,45,46,48,49,51],
+  moderate:[14,15,15,17,18,20,21,23,24,26,27,29,30,32,33,35,36,38,39,41,42,44,45,47,48,50],
+  low:[12,13,13,15,16,18,19,21,22,24,25,27,28,30,31,33,34,36,37,39,40,42,43,45,46,48]
+ },
+ attack:{
+  extreme:[10,10,11,13,14,16,17,19,20,22,23,25,27,28,29,31,32,34,35,37,38,40,41,43,44,46],
+  high:[8,8,9,11,12,14,15,17,18,20,21,23,24,26,27,29,30,32,33,35,36,38,39,41,42,44],
+  moderate:[6,6,7,9,10,12,13,15,16,18,19,21,22,24,25,27,28,30,31,33,34,36,37,39,40,42],
+  low:[4,4,5,7,8,9,11,12,13,15,16,17,19,20,21,23,24,25,27,28,29,31,32,33,35,36]
+ },
+ damage:{
+  extreme:["1d6+1","1d6+3","1d8+4","1d12+4","1d12+8","2d10+7","2d12+7","2d12+10","2d12+12","2d12+15","2d12+17","2d12+20","2d12+22","3d12+19","3d12+21","3d12+24","3d12+26","3d12+29","3d12+31","3d12+34","4d12+29","4d12+32","4d12+34","4d12+37","4d12+39","4d12+42"],
+  high:["1d4+1","1d6+2","1d6+3","1d10+4","1d10+6","2d8+5","2d8+7","2d8+9","2d10+9","2d10+11","2d10+13","2d12+13","2d12+15","3d10+14","3d10+16","3d10+18","3d12+17","3d12+18","3d12+19","3d12+20","4d10+20","4d10+22","4d10+24","4d10+26","4d12+24","4d12+26"],
+  moderate:["1d4","1d4+2","1d6+2","1d8+4","1d8+6","2d6+5","2d6+6","2d6+8","2d8+8","2d8+9","2d8+11","2d10+11","2d10+12","3d8+12","3d8+14","3d8+15","3d10+14","3d10+15","3d10+16","3d10+17","4d8+17","4d8+19","4d8+20","4d8+22","4d10+20","4d10+22"],
+  low:["1d4","1d4+1","1d4+2","1d6+3","1d6+5","2d4+4","2d4+6","2d4+7","2d6+6","2d6+8","2d6+9","2d6+10","2d8+10","3d6+10","3d6+11","3d6+13","3d6+14","3d6+15","3d6+16","3d6+17","4d6+14","4d6+15","4d6+17","4d6+18","4d6+19","4d6+21"]
+ },
+ hpModerate:[8,15,20,30,45,60,75,95,115,135,155,175,195,215,235,255,275,295,315,335,355,375,400,430,460,500],
+ hpHigh:[9,18,25,38,56,75,94,119,144,169,194,219,244,269,294,319,344,369,394,419,444,469,500,538,575,625],
+ hpLow:[6,12,15,23,34,45,56,71,86,101,116,131,146,161,176,191,206,221,236,251,266,281,300,323,345,375]
+};
+function creatureIndex(level){return Math.max(0,Math.min(25,Number(level)+1))}
+function creatureSuggestion(level,profile){
+ const i=creatureIndex(level);
+ const profiles={
+  soldier:{ac:"high",attack:"high",damage:"high",hp:"moderate",fort:2,ref:0,will:-1},
+  brute:{ac:"moderate",attack:"moderate",damage:"extreme",hp:"high",fort:2,ref:-1,will:-1},
+  skirmisher:{ac:"high",attack:"high",damage:"moderate",hp:"low",fort:0,ref:2,will:0},
+  spellcaster:{ac:"low",attack:"low",damage:"low",hp:"low",fort:-1,ref:0,will:2},
+  balanced:{ac:"moderate",attack:"moderate",damage:"moderate",hp:"moderate",fort:1,ref:1,will:1}
+ };
+ const p=profiles[profile]||profiles.balanced;
+ const moderateSave=Number(level)+7;
+ const hp={high:CREATURE_TABLES.hpHigh,moderate:CREATURE_TABLES.hpModerate,low:CREATURE_TABLES.hpLow}[p.hp][i];
+ return{level:Number(level),ac:CREATURE_TABLES.ac[p.ac][i],attack:CREATURE_TABLES.attack[p.attack][i],damage:CREATURE_TABLES.damage[p.damage][i],hp,
+  perception:Number(level)+7,fort:moderateSave+p.fort,ref:moderateSave+p.ref,will:moderateSave+p.will,
+  spellDc:Number(level)+17,spellAttack:Number(level)+9,profile};
+}
+function previewCreature(){
+ const s=creatureSuggestion($("builderCreatureLevel").value,$("builderProfile").value);
+ $("creatureBuilderPreview").innerHTML=`<strong>Level ${s.level} ${esc(s.profile)}</strong><br>
+ AC ${s.ac} · HP ${s.hp} · Perception +${s.perception}<br>
+ Fort +${s.fort} · Ref +${s.ref} · Will +${s.will}<br>
+ Strike +${s.attack} · Damage ${esc(s.damage)} · Spell DC ${s.spellDc} / attack +${s.spellAttack}`;
+ return s;
+}
+$("previewCreatureBtn").onclick=previewCreature;
+$("createCreatureBtn").onclick=()=>{
+ const s=previewCreature(),c=defaultCombatant($("builderCreatureName").value.trim()||"Generated Creature");
+ Object.assign(c,{level:s.level,initiative:s.perception,maxHp:s.hp,hp:s.hp,ac:s.ac,perception:s.perception,fort:s.fort,ref:s.ref,will:s.will,spellDc:s.spellDc,spellAttack:s.spellAttack});
+ c.attacks=[{id:uid(),name:"Primary Strike",actionCost:1,attack:s.attack,traits:"",damage:s.damage,damageType:$("builderDamageType").value.trim(),range:"melee",reload:"",ammo:"",special:"Generated by level; edit as needed."}];
+ c.notes=`Generated with the ${s.profile} profile. Review strengths, weaknesses, and special abilities before play.`;
+ encounter().combatants.push(c);selectedId=c.id;render();toast(`${c.name} added.`);
+};
+
+function runeCalculation(){
+ const base=$("runeBaseDamage").value.trim(),match=base.match(/^(\d+)d(\d+)([+-]\d+)?$/i);
+ if(!match)throw Error("Base damage must look like 1d8+4.");
+ const baseDice=Number(match[1]),sides=Number(match[2]),flat=Number(match[3]||0);
+ const potency=Number($("runePotency").value),striking=Number($("runeStriking").value);
+ const dice=baseDice+striking;
+ const attack=Number($("runeBaseAttack").value||0)+potency;
+ const expression=`${dice}d${sides}${flat===0?"":flat>0?`+${flat}`:flat}`;
+ const property=$("runePropertyDamage").value.trim();
+ return{name:$("runeWeaponName").value.trim()||"Runed Weapon",attack,damage:expression,property,potency,striking};
+}
+$("calculateRunesBtn").onclick=()=>{try{const r=runeCalculation();$("runeResult").innerHTML=`<strong>${esc(r.name)}</strong><br>Attack +${r.attack} · Damage ${esc(r.damage)}${r.property?` + ${esc(r.property)}`:""}`;}catch(error){$("runeResult").textContent=error.message}};
+$("addRuneAttackBtn").onclick=()=>{
+ try{
+  const r=runeCalculation(),c=combatant();
+  if(!c)throw Error("Select a combatant in the Combatant Builder first.");
+  c.attacks.push({id:uid(),name:r.name,actionCost:1,attack:r.attack,traits:`magical${r.potency?`, +${r.potency} potency`:""}`,damage:r.damage,damageType:"",range:"",reload:"",ammo:"",special:r.property?`Property rune damage: ${r.property}`:""});
+  render();toast("Runed attack added.");
+ }catch(error){toast(error.message)}
+};
+
+function renderConditionTools(){
+ const e=encounter();
+ $("conditionCombatantSelect").innerHTML=e.combatants.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join("");
+ if(selectedId&&e.combatants.some(c=>c.id===selectedId))$("conditionCombatantSelect").value=selectedId;
+ const c=e.combatants.find(x=>x.id===$("conditionCombatantSelect").value)||e.combatants[0];
+ $("structuredConditionList").innerHTML=c?.structuredConditions?.length?c.structuredConditions.map((condition,index)=>`
+  <div class="condition-row"><div><strong>${esc(condition.name)}${condition.value?` ${condition.value}`:""}</strong>${condition.notes?`<p>${esc(condition.notes)}</p>`:""}</div><button type="button" data-remove-condition="${index}">Remove</button></div>`).join(""):"<p class='muted'>No structured conditions.</p>";
+ document.querySelectorAll("[data-remove-condition]").forEach(button=>button.onclick=()=>{c.structuredConditions.splice(Number(button.dataset.removeCondition),1);render();});
+}
+$("conditionCombatantSelect").onchange=renderConditionTools;
+$("applyConditionBtn").onclick=()=>{
+ const c=find($("conditionCombatantSelect").value);if(!c)return toast("Add a combatant first.");
+ const name=$("conditionName").value,value=Number($("conditionValue").value)||0,notes=$("conditionNotes").value.trim();
+ const existing=c.structuredConditions.find(x=>x.name===name);
+ if(existing){existing.value=value;existing.notes=notes}else c.structuredConditions.push({name,value,notes});
+ render();toast(`${name} applied.`);
+};
+$("recoveryCheckBtn").onclick=()=>{
+ const c=find($("conditionCombatantSelect").value);if(!c)return toast("Select a combatant.");
+ const dying=c.structuredConditions.find(x=>x.name==="dying");if(!dying)return toast("This combatant is not dying.");
+ const dc=10+(dying.value||0),rollValue=Math.floor(Math.random()*20)+1;
+ if(rollValue===20)dying.value=Math.max(0,dying.value-2);
+ else if(rollValue===1)dying.value+=2;
+ else if(rollValue>=dc)dying.value=Math.max(0,dying.value-1);
+ else dying.value+=1;
+ if(dying.value<=0){c.structuredConditions=c.structuredConditions.filter(x=>x!==dying);const wounded=c.structuredConditions.find(x=>x.name==="wounded");if(wounded)wounded.value=(wounded.value||0)+1;else c.structuredConditions.push({name:"wounded",value:1,notes:"Gained after recovery from dying."});}
+ render();toast(`${c.name} rolled ${rollValue} vs DC ${dc}.`);
+};
+
+const XP_BY_DIFFERENCE={"-4":10,"-3":15,"-2":20,"-1":30,"0":40,"1":60,"2":80,"3":120,"4":160};
+$("calculateXpBtn").onclick=()=>{
+ const partyLevel=Number($("xpPartyLevel").value)||1,partySize=Number($("xpPartySize").value)||4;
+ const enemies=encounter().combatants.filter(c=>c.type!=="Player");
+ let total=0,unrated=0;
+ for(const c of enemies){const diff=c.level-partyLevel;if(diff<-4){total+=Math.max(1,Math.round(10*Math.pow(.5,-4-diff)))}else if(diff>4){unrated++}else total+=XP_BY_DIFFERENCE[String(diff)]||0}
+ const base={trivial:40,low:60,moderate:80,severe:120,extreme:160};
+ const adjustment={trivial:10,low:20,moderate:20,severe:30,extreme:40};
+ const budgets=Object.fromEntries(Object.keys(base).map(k=>[k,base[k]+(partySize-4)*adjustment[k]]));
+ let threat="Beyond Extreme";
+ if(total<=budgets.trivial)threat="Trivial";else if(total<=budgets.low)threat="Low";else if(total<=budgets.moderate)threat="Moderate";else if(total<=budgets.severe)threat="Severe";else if(total<=budgets.extreme)threat="Extreme";
+ $("xpBudgetResult").innerHTML=`<strong>${total} XP — ${threat}</strong><br>Adjusted budgets: Trivial ${budgets.trivial}, Low ${budgets.low}, Moderate ${budgets.moderate}, Severe ${budgets.severe}, Extreme ${budgets.extreme}.${unrated?`<br>${unrated} creature(s) are more than 4 levels above the party and need manual review.`:""}`;
+};
+
+function cloudAuthHeader(){
+ const user=$("cloudUsername").value,password=$("cloudPassword").value;
+ return user||password?{"Authorization":"Basic "+btoa(`${user}:${password}`)}:{};
+}
+$("cloudUploadBtn").onclick=async()=>{
+ const url=$("cloudUrl").value.trim();if(!url)return $("cloudStatus").textContent="Enter a WebDAV file URL.";
+ try{
+  collect();collectNotes();save();
+  const response=await fetch(url,{method:"PUT",headers:{"Content-Type":"application/json",...cloudAuthHeader()},body:JSON.stringify({version:5,state,simpleInitiative},null,2)});
+  if(!response.ok)throw Error(`Upload failed: ${response.status}`);
+  $("cloudStatus").textContent="Cloud upload completed.";
+ }catch(error){$("cloudStatus").textContent=`Cloud upload failed: ${error.message}`}
+};
+$("cloudDownloadBtn").onclick=async()=>{
+ const url=$("cloudUrl").value.trim();if(!url)return $("cloudStatus").textContent="Enter a WebDAV file URL.";
+ try{
+  const response=await fetch(url,{headers:cloudAuthHeader()});if(!response.ok)throw Error(`Download failed: ${response.status}`);
+  const data=await response.json();if(!data.state?.encounters)throw Error("The cloud file is not a tracker save.");
+  state=data.state;if(data.simpleInitiative)simpleInitiative=data.simpleInitiative;normalizeState();selectedId=null;render();
+  $("cloudStatus").textContent="Cloud download completed.";
+ }catch(error){$("cloudStatus").textContent=`Cloud download failed: ${error.message}`}
+};
+
 window.addEventListener("beforeunload",()=>{try{collect();collectNotes();save();saveSimpleInitiative()}catch{}});
-render();
+normalizeState();render();previewCreature();$("calculateRunesBtn").click();$("calculateXpBtn").click();
 })();

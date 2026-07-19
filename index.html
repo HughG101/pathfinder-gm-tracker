@@ -26,6 +26,7 @@
   <button class="tab active" data-tab="encounter" type="button">Encounter</button>
   <button class="tab" data-tab="builder" type="button">Combatant Builder</button>
   <button class="tab" data-tab="initiative" type="button">Initiative Tracker</button>
+  <button class="tab" data-tab="tools" type="button">GM Tools</button>
   <button class="tab" data-tab="notes" type="button">Notes & Treasure</button>
 </nav>
 
@@ -189,6 +190,122 @@
         </div>
 
         <div id="simpleInitiativeList" class="simple-initiative-list"></div>
+      </section>
+    </div>
+  </section>
+
+
+  <section id="toolsTab" class="tab-panel">
+    <div class="tools-grid">
+      <section class="card tool-card">
+        <div class="section-heading">
+          <div>
+            <h2>Creature Builder by Level</h2>
+            <p class="muted">Generate editable suggested statistics using GM Core creature-building values.</p>
+          </div>
+        </div>
+        <div class="form-grid compact">
+          <label>Name<input id="builderCreatureName" type="text" value="Generated Creature"></label>
+          <label>Level<input id="builderCreatureLevel" type="number" min="-1" max="24" value="4"></label>
+          <label>Profile
+            <select id="builderProfile">
+              <option value="soldier">Soldier</option>
+              <option value="brute">Brute</option>
+              <option value="skirmisher">Skirmisher</option>
+              <option value="spellcaster">Spellcaster</option>
+              <option value="balanced">Balanced</option>
+            </select>
+          </label>
+          <label>Primary damage type<input id="builderDamageType" type="text" value="physical"></label>
+        </div>
+        <div id="creatureBuilderPreview" class="tool-result" aria-live="polite"></div>
+        <div class="tool-buttons">
+          <button id="previewCreatureBtn" type="button">Preview</button>
+          <button id="createCreatureBtn" class="primary" type="button">Add to Encounter</button>
+        </div>
+      </section>
+
+      <section class="card tool-card">
+        <h2>Rune-Driven Weapon Calculator</h2>
+        <div class="form-grid compact">
+          <label>Weapon name<input id="runeWeaponName" type="text" value="Longsword"></label>
+          <label>Base attack modifier<input id="runeBaseAttack" type="number" value="10"></label>
+          <label>Base damage<input id="runeBaseDamage" type="text" value="1d8+4"></label>
+          <label>Potency rune
+            <select id="runePotency"><option value="0">None</option><option value="1">+1</option><option value="2">+2</option><option value="3">+3</option></select>
+          </label>
+          <label>Striking rune
+            <select id="runeStriking">
+              <option value="0">None</option>
+              <option value="1">Striking</option>
+              <option value="2">Greater striking</option>
+              <option value="3">Major striking</option>
+            </select>
+          </label>
+          <label>Property-rune extra damage<input id="runePropertyDamage" type="text" placeholder="1d6 fire"></label>
+        </div>
+        <div id="runeResult" class="tool-result" aria-live="polite"></div>
+        <div class="tool-buttons">
+          <button id="calculateRunesBtn" type="button">Calculate</button>
+          <button id="addRuneAttackBtn" type="button">Add to Selected Combatant</button>
+        </div>
+      </section>
+
+      <section class="card tool-card">
+        <h2>Structured Conditions</h2>
+        <div class="form-grid compact">
+          <label>Combatant<select id="conditionCombatantSelect"></select></label>
+          <label>Condition
+            <select id="conditionName">
+              <option value="frightened">Frightened</option>
+              <option value="slowed">Slowed</option>
+              <option value="stunned">Stunned</option>
+              <option value="wounded">Wounded</option>
+              <option value="dying">Dying</option>
+              <option value="doomed">Doomed</option>
+              <option value="sickened">Sickened</option>
+              <option value="clumsy">Clumsy</option>
+              <option value="drained">Drained</option>
+              <option value="enfeebled">Enfeebled</option>
+              <option value="stupefied">Stupefied</option>
+              <option value="off-guard">Off-Guard</option>
+              <option value="prone">Prone</option>
+              <option value="quickened">Quickened</option>
+            </select>
+          </label>
+          <label>Value<input id="conditionValue" type="number" min="0" value="1"></label>
+          <label>Notes<input id="conditionNotes" type="text" placeholder="Duration or source"></label>
+        </div>
+        <div class="tool-buttons">
+          <button id="applyConditionBtn" type="button">Apply / Update</button>
+          <button id="recoveryCheckBtn" type="button">Dying Recovery Check</button>
+        </div>
+        <div id="structuredConditionList" class="condition-list"></div>
+      </section>
+
+      <section class="card tool-card">
+        <h2>Encounter XP Budget</h2>
+        <div class="form-grid compact">
+          <label>Party level<input id="xpPartyLevel" type="number" min="1" max="20" value="3"></label>
+          <label>Party size<input id="xpPartySize" type="number" min="1" max="12" value="4"></label>
+        </div>
+        <div id="xpBudgetResult" class="tool-result" aria-live="polite"></div>
+        <button id="calculateXpBtn" type="button">Calculate from Encounter</button>
+      </section>
+
+      <section class="card tool-card">
+        <h2>Optional Cloud Synchronization</h2>
+        <p class="muted">Uses a WebDAV-compatible private file location. Your provider must allow browser CORS requests. Credentials are kept only until the page closes.</p>
+        <div class="form-grid compact">
+          <label>WebDAV file URL<input id="cloudUrl" type="url" placeholder="https://server.example/path/pf2e-tracker.json"></label>
+          <label>Username<input id="cloudUsername" type="text" autocomplete="username"></label>
+          <label>Password<input id="cloudPassword" type="password" autocomplete="current-password"></label>
+        </div>
+        <div class="tool-buttons">
+          <button id="cloudUploadBtn" type="button">Upload Save</button>
+          <button id="cloudDownloadBtn" type="button">Download Save</button>
+        </div>
+        <div id="cloudStatus" class="tool-result" aria-live="polite">Cloud sync is disabled until you enter a URL.</div>
       </section>
     </div>
   </section>

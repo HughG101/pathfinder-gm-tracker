@@ -23,3 +23,18 @@ Upload and replace:
 - `README.md`
 
 Keep the folder structure exactly as shown.
+
+
+## Version 5 optional GM tools
+
+- Creature builder by level using selected GM Core reference values
+- Rune-driven attack and damage calculation
+- Structured conditions with frightened, slowed, stunned, dying, wounded, and other common conditions
+- Turn-start/end automation for frightened, slowed, stunned, and quickened
+- Dying recovery checks
+- Encounter XP budget calculator adjusted for party size
+- Optional WebDAV cloud upload/download
+
+The creature builder produces suggested, editable statistics. It is not a substitute for reviewing the complete creature-building guidance.
+
+Cloud synchronization requires a private WebDAV-compatible provider that allows CORS requests from your GitHub Pages domain. Credentials are held only in the current page session and are not written into the tracker save.
