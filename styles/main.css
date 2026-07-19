@@ -50,3 +50,14 @@ main{max-width:1500px;margin:auto;padding:1rem}.tab-panel{display:none}.tab-pane
 .ability-summary strong{display:inline-block;margin-right:.35rem}
 .ability-summary p{margin:.35rem 0 0;color:var(--muted);font-size:.88rem;line-height:1.35}
 @media(max-width:900px){.encounter-ability-grid{grid-template-columns:1fr}}
+
+.card-actions{display:flex;gap:.4rem;flex-wrap:wrap}
+.initiative-tool-layout{max-width:1000px;margin:0 auto}
+.simple-init-form{display:grid;grid-template-columns:1.5fr .7fr .7fr auto;gap:.7rem;align-items:end}
+.simple-init-controls{display:flex;flex-wrap:wrap;align-items:center;gap:.6rem;margin:1rem 0}
+.simple-round-display{display:flex;flex-direction:column;min-width:150px;text-align:center}
+.simple-initiative-list{display:grid;gap:.6rem}
+.simple-init-row{display:flex;justify-content:space-between;gap:1rem;align-items:center;border:1px solid var(--border);border-left:6px solid var(--border);border-radius:.65rem;padding:.75rem;background:#141a25}
+.simple-init-row.active-turn{border-left-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.simple-init-row-actions{display:flex;gap:.4rem;flex-wrap:wrap}
+@media(max-width:760px){.simple-init-form{grid-template-columns:1fr}.simple-init-row{align-items:flex-start;flex-direction:column}}

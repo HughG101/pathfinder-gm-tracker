@@ -49,6 +49,71 @@ function redSunSample(){
 }
 function defaultEncounter(name="New Encounter"){return{id:uid(),name,round:1,turnIndex:-1,combatants:[redSunSample()],notes:"",loot:[]}}
 let state=load(),selectedId=null;
+let simpleInitiative=loadSimpleInitiative();
+
+function loadSimpleInitiative(){
+  try{
+    const saved=JSON.parse(localStorage.getItem("pf2e-simple-initiative-v1"));
+    if(saved&&Array.isArray(saved.entries))return saved;
+  }catch{}
+  return{round:1,turnIndex:-1,entries:[]};
+}
+function saveSimpleInitiative(){
+  localStorage.setItem("pf2e-simple-initiative-v1",JSON.stringify(simpleInitiative));
+}
+function renderSimpleInitiative(){
+  $("simpleRoundValue").textContent=simpleInitiative.round;
+  const active=simpleInitiative.entries[simpleInitiative.turnIndex];
+  $("simpleTurnLabel").textContent=active?active.name:"No active entry";
+
+  $("simpleInitiativeList").innerHTML=simpleInitiative.entries.length
+    ? simpleInitiative.entries.map((entry,index)=>`
+      <article class="simple-init-row ${index===simpleInitiative.turnIndex?"active-turn":""}">
+        <div>
+          <strong>${esc(entry.name)}</strong>
+          <span class="badge">Initiative ${entry.initiative}</span>
+          <span class="badge">Perception ${entry.perception}</span>
+        </div>
+        <div class="simple-init-row-actions">
+          <button type="button" data-simple-copy="${entry.id}">Duplicate</button>
+          <button type="button" data-simple-up="${entry.id}">Up</button>
+          <button type="button" data-simple-down="${entry.id}">Down</button>
+          <button type="button" data-simple-remove="${entry.id}" class="danger">Remove</button>
+        </div>
+      </article>`).join("")
+    : `<p class="muted">No initiative entries yet.</p>`;
+
+  document.querySelectorAll("[data-simple-copy]").forEach(button=>button.onclick=()=>{
+    const source=simpleInitiative.entries.find(entry=>entry.id===button.dataset.simpleCopy);
+    if(!source)return;
+    simpleInitiative.entries.push({...source,id:uid(),name:`${source.name} Copy`});
+    renderSimpleInitiative();
+  });
+  document.querySelectorAll("[data-simple-remove]").forEach(button=>button.onclick=()=>{
+    simpleInitiative.entries=simpleInitiative.entries.filter(entry=>entry.id!==button.dataset.simpleRemove);
+    simpleInitiative.turnIndex=Math.min(simpleInitiative.turnIndex,simpleInitiative.entries.length-1);
+    renderSimpleInitiative();
+  });
+  document.querySelectorAll("[data-simple-up]").forEach(button=>button.onclick=()=>{
+    const index=simpleInitiative.entries.findIndex(entry=>entry.id===button.dataset.simpleUp);
+    if(index<=0)return;
+    [simpleInitiative.entries[index-1],simpleInitiative.entries[index]]=[simpleInitiative.entries[index],simpleInitiative.entries[index-1]];
+    if(simpleInitiative.turnIndex===index)simpleInitiative.turnIndex=index-1;
+    else if(simpleInitiative.turnIndex===index-1)simpleInitiative.turnIndex=index;
+    renderSimpleInitiative();
+  });
+  document.querySelectorAll("[data-simple-down]").forEach(button=>button.onclick=()=>{
+    const index=simpleInitiative.entries.findIndex(entry=>entry.id===button.dataset.simpleDown);
+    if(index<0||index>=simpleInitiative.entries.length-1)return;
+    [simpleInitiative.entries[index+1],simpleInitiative.entries[index]]=[simpleInitiative.entries[index],simpleInitiative.entries[index+1]];
+    if(simpleInitiative.turnIndex===index)simpleInitiative.turnIndex=index+1;
+    else if(simpleInitiative.turnIndex===index+1)simpleInitiative.turnIndex=index;
+    renderSimpleInitiative();
+  });
+
+  saveSimpleInitiative();
+}
+
 function load(){try{const x=JSON.parse(localStorage.getItem(KEY));if(x?.encounters?.length)return x}catch{} const e=defaultEncounter("Sample Encounter");return{currentEncounterId:e.id,encounters:[e]}}
 function encounter(){let e=state.encounters.find(x=>x.id===state.currentEncounterId);if(!e){e=state.encounters[0];state.currentEncounterId=e.id}return e}
 function combatant(){return encounter().combatants.find(c=>c.id===selectedId)}
@@ -56,7 +121,7 @@ function save(msg=false){localStorage.setItem(KEY,JSON.stringify(state));if(msg)
 function toast(t){$("toast").textContent=t;$("toast").classList.add("show");clearTimeout(toast.t);toast.t=setTimeout(()=>$("toast").classList.remove("show"),2200)}
 function shortDescription(text,max=150){const value=String(text??"").trim();return value.length>max?value.slice(0,max-1).trimEnd()+"…":value}
 function roll(expr){const m=String(expr).replace(/\s/g,"").match(/^(\d*)d(\d+)([+-]\d+)?$/i);if(!m)throw Error("Use a format such as 1d20+7.");const n=+m[1]||1,s=+m[2],mod=+m[3]||0;if(n<1||n>100||s<2)throw Error("Invalid dice.");const rs=Array.from({length:n},()=>Math.floor(Math.random()*s)+1);return`${expr}: [${rs.join(", ")}]${mod?` ${mod>=0?"+":"-"} ${Math.abs(mod)}`:""} = ${rs.reduce((a,b)=>a+b,0)+mod}`}
-function render(){renderSelect();renderEncounter();renderPicker();renderBuilder();renderNotes();save()}
+function render(){renderSelect();renderEncounter();renderPicker();renderBuilder();renderNotes();renderSimpleInitiative();save()}
 function renderSelect(){$("encounterSelect").innerHTML=state.encounters.map(e=>`<option value="${e.id}" ${e.id===state.currentEncounterId?"selected":""}>${esc(e.name)}</option>`).join("")}
 function renderEncounter(){
  const e=encounter();$("encounterName").value=e.name;$("roundValue").textContent=e.round;$("turnLabel").textContent=e.combatants[e.turnIndex]?.name||"No active combatant";
@@ -68,7 +133,7 @@ function renderEncounter(){
  const reactionList=(c.reactions||[]).map(r=>`<div class="ability-summary"><strong>${esc(r.name)}</strong><span class="badge">Reaction</span><p>${esc(shortDescription(r.effect||r.trigger||"No description."))}</p></div>`).join("");
  const specialList=(c.specialAbilities||[]).map(a=>`<div class="ability-summary"><strong>${esc(a.name)}</strong>${a.category?`<span class="badge">${esc(a.category)}</span>`:""}<p>${esc(shortDescription(a.effect||a.trigger||"No description."))}</p></div>`).join("");
  return`<article class="combatant-card ${i===e.turnIndex?"active-turn":""}">
- <div class="combatant-top"><div><div class="combatant-name">${esc(c.name)}</div><span class="badge">${esc(c.type)} · Level ${c.level}</span></div><strong>Init ${c.initiative}</strong><strong>AC ${c.ac}</strong><button data-edit="${c.id}" type="button">Edit</button></div>
+ <div class="combatant-top"><div><div class="combatant-name">${esc(c.name)}</div><span class="badge">${esc(c.type)} · Level ${c.level}</span></div><strong>Init ${c.initiative}</strong><strong>AC ${c.ac}</strong><div class="card-actions"><button data-copy="${c.id}" type="button">Duplicate</button><button data-edit="${c.id}" type="button">Edit</button></div></div>
  <div class="hp-bar"><div class="hp-fill" style="width:${hpPct}%"></div></div>
  <div class="combatant-controls"><label>Amount<input data-amount="${c.id}" type="number" value="1" min="0"></label><button data-hurt="${c.id}">Damage</button><button data-heal="${c.id}">Heal</button><button data-temp="${c.id}">Temp HP</button><strong>HP ${c.hp}/${c.maxHp}${c.tempHp?` +${c.tempHp} temp`:""}</strong><button data-save="${c.id}" data-kind="fort">Fort +${c.fort}</button><button data-save="${c.id}" data-kind="ref">Ref +${c.ref}</button><button data-save="${c.id}" data-kind="will">Will +${c.will}</button><button data-per="${c.id}">Perception +${c.perception}</button><button data-react="${c.id}">${c.reactionUsed?"Reaction Used":"Reaction Ready"}</button></div>
  <div class="detail-line">${esc(c.senses)}${c.languages?` · Languages: ${esc(c.languages)}`:""}</div>
@@ -84,6 +149,22 @@ function renderEncounter(){
 }
 function bindCards(){
  document.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>{selectedId=b.dataset.edit;tab("builder");renderPicker();renderBuilder()});
+ document.querySelectorAll("[data-copy]").forEach(b=>b.onclick=()=>{
+   const original=find(b.dataset.copy);
+   if(!original)return;
+   const copy=structuredClone(original);
+   copy.id=uid();
+   copy.name=`${original.name} Copy`;
+   copy.actionsUsed=0;
+   copy.reactionUsed=false;
+   for(const collection of ["skills","items","attacks","actions","reactions","specialAbilities","spells"]){
+     if(Array.isArray(copy[collection]))copy[collection].forEach(entry=>entry.id=uid());
+   }
+   encounter().combatants.push(copy);
+   selectedId=copy.id;
+   render();
+   toast(`${copy.name} added.`);
+ });
  document.querySelectorAll("[data-hurt]").forEach(b=>b.onclick=()=>{const c=find(b.dataset.hurt),n=amount(c.id);let r=n;if(c.tempHp){const a=Math.min(c.tempHp,r);c.tempHp-=a;r-=a}c.hp=Math.max(0,c.hp-r);render()});
  document.querySelectorAll("[data-heal]").forEach(b=>b.onclick=()=>{const c=find(b.dataset.heal);c.hp=Math.min(c.maxHp,c.hp+amount(c.id));render()});
  document.querySelectorAll("[data-temp]").forEach(b=>b.onclick=()=>{const c=find(b.dataset.temp);c.tempHp=Math.max(c.tempHp,amount(c.id));render()});
@@ -151,6 +232,52 @@ $("addLootBtn").onclick=()=>{collectNotes();encounter().loot.push({id:uid(),name
 $("saveBtn").onclick=()=>{collect();collectNotes();encounter().name=$("encounterName").value.trim()||"Untitled Encounter";save(true);render()};
 $("exportBtn").onclick=()=>{collect();collectNotes();save();const blob=new Blob([JSON.stringify({version:2,state},null,2)],{type:"application/json"});const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=`pf2e-tracker-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(url)};
 $("importInput").onchange=async e=>{const f=e.target.files?.[0];if(!f)return;try{const x=JSON.parse(await f.text());if(!x.state?.encounters)throw Error("Invalid tracker file.");state=x.state;selectedId=null;render();toast("Import complete.")}catch(err){toast(err.message)}e.target.value=""};
-window.addEventListener("beforeunload",()=>{try{collect();collectNotes();save()}catch{}});
+
+$("addSimpleInitiativeBtn").onclick=()=>{
+  const name=$("simpleInitName").value.trim();
+  if(!name)return toast("Enter a name first.");
+  simpleInitiative.entries.push({
+    id:uid(),
+    name,
+    initiative:+$("simpleInitValue").value||0,
+    perception:+$("simpleInitPerception").value||0
+  });
+  $("simpleInitName").value="";
+  $("simpleInitValue").value="0";
+  $("simpleInitPerception").value="0";
+  renderSimpleInitiative();
+};
+$("simpleInitName").onkeydown=event=>{
+  if(event.key==="Enter")$("addSimpleInitiativeBtn").click();
+};
+$("sortSimpleInitiativeBtn").onclick=()=>{
+  simpleInitiative.entries.sort((a,b)=>b.initiative-a.initiative||b.perception-a.perception||a.name.localeCompare(b.name));
+  simpleInitiative.turnIndex=simpleInitiative.entries.length?0:-1;
+  renderSimpleInitiative();
+};
+$("nextSimpleTurnBtn").onclick=()=>{
+  if(!simpleInitiative.entries.length)return;
+  simpleInitiative.turnIndex++;
+  if(simpleInitiative.turnIndex>=simpleInitiative.entries.length){
+    simpleInitiative.turnIndex=0;
+    simpleInitiative.round++;
+  }
+  renderSimpleInitiative();
+};
+$("prevSimpleTurnBtn").onclick=()=>{
+  if(!simpleInitiative.entries.length)return;
+  simpleInitiative.turnIndex--;
+  if(simpleInitiative.turnIndex<0){
+    simpleInitiative.turnIndex=simpleInitiative.entries.length-1;
+    simpleInitiative.round=Math.max(1,simpleInitiative.round-1);
+  }
+  renderSimpleInitiative();
+};
+$("resetSimpleInitiativeBtn").onclick=()=>{
+  simpleInitiative={round:1,turnIndex:-1,entries:[]};
+  renderSimpleInitiative();
+};
+
+window.addEventListener("beforeunload",()=>{try{collect();collectNotes();save();saveSimpleInitiative()}catch{}});
 render();
 })();

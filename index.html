@@ -25,6 +25,7 @@
 <nav class="tabs">
   <button class="tab active" data-tab="encounter" type="button">Encounter</button>
   <button class="tab" data-tab="builder" type="button">Combatant Builder</button>
+  <button class="tab" data-tab="initiative" type="button">Initiative Tracker</button>
   <button class="tab" data-tab="notes" type="button">Notes & Treasure</button>
 </nav>
 
@@ -154,6 +155,40 @@
 
         <label>Combatant notes<textarea id="cNotes" rows="6"></textarea></label>
         <button id="applyCombatantBtn" class="primary" type="button">Apply Changes</button>
+      </section>
+    </div>
+  </section>
+
+
+  <section id="initiativeTab" class="tab-panel">
+    <div class="initiative-tool-layout">
+      <section class="card">
+        <div class="section-heading">
+          <div>
+            <h2>Standalone Initiative Tracker</h2>
+            <p class="muted">Track initiative without creating full combatant stat blocks.</p>
+          </div>
+          <button id="resetSimpleInitiativeBtn" class="danger" type="button">Reset</button>
+        </div>
+
+        <div class="simple-init-form">
+          <label>Name<input id="simpleInitName" type="text" placeholder="Creature or character name"></label>
+          <label>Initiative<input id="simpleInitValue" type="number" value="0"></label>
+          <label>Perception tie-breaker<input id="simpleInitPerception" type="number" value="0"></label>
+          <button id="addSimpleInitiativeBtn" type="button">Add Entry</button>
+        </div>
+
+        <div class="simple-init-controls">
+          <button id="sortSimpleInitiativeBtn" type="button">Sort</button>
+          <button id="prevSimpleTurnBtn" type="button">Previous</button>
+          <div class="simple-round-display">
+            <strong>Round <span id="simpleRoundValue">1</span></strong>
+            <span id="simpleTurnLabel">No active entry</span>
+          </div>
+          <button id="nextSimpleTurnBtn" type="button">Next Turn</button>
+        </div>
+
+        <div id="simpleInitiativeList" class="simple-initiative-list"></div>
       </section>
     </div>
   </section>
