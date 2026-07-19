@@ -61,3 +61,7 @@ main{max-width:1500px;margin:auto;padding:1rem}.tab-panel{display:none}.tab-pane
 .simple-init-row.active-turn{border-left-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
 .simple-init-row-actions{display:flex;gap:.4rem;flex-wrap:wrap}
 @media(max-width:760px){.simple-init-form{grid-template-columns:1fr}.simple-init-row{align-items:flex-start;flex-direction:column}}
+
+.spell-summary .badge{
+  margin-left:.2rem
+}

@@ -132,6 +132,13 @@ function renderEncounter(){
  const actionList=(c.actions||[]).map(a=>`<div class="ability-summary"><strong>${esc(a.name)}</strong><span class="badge">${Number(a.cost)||0} action${Number(a.cost)===1?"":"s"}</span><p>${esc(shortDescription(a.effect||a.trigger||"No description."))}</p></div>`).join("");
  const reactionList=(c.reactions||[]).map(r=>`<div class="ability-summary"><strong>${esc(r.name)}</strong><span class="badge">Reaction</span><p>${esc(shortDescription(r.effect||r.trigger||"No description."))}</p></div>`).join("");
  const specialList=(c.specialAbilities||[]).map(a=>`<div class="ability-summary"><strong>${esc(a.name)}</strong>${a.category?`<span class="badge">${esc(a.category)}</span>`:""}<p>${esc(shortDescription(a.effect||a.trigger||"No description."))}</p></div>`).join("");
+ const spellList=(c.spells||[]).map(s=>`<div class="ability-summary spell-summary">
+   <strong>${esc(s.name)}</strong>
+   ${s.rank?`<span class="badge">${esc(s.rank)}</span>`:""}
+   ${s.type?`<span class="badge">${esc(s.type)}</span>`:""}
+   ${s.actionCost?`<span class="badge">${esc(s.actionCost)} action${String(s.actionCost)==="1"?"":"s"}</span>`:""}
+   ${String(s.effect||"").trim()?`<p>${esc(shortDescription(s.effect))}</p>`:""}
+ </div>`).join("");
  return`<article class="combatant-card ${i===e.turnIndex?"active-turn":""}">
  <div class="combatant-top"><div><div class="combatant-name">${esc(c.name)}</div><span class="badge">${esc(c.type)} · Level ${c.level}</span></div><strong>Init ${c.initiative}</strong><strong>AC ${c.ac}</strong><div class="card-actions"><button data-copy="${c.id}" type="button">Duplicate</button><button data-edit="${c.id}" type="button">Edit</button></div></div>
  <div class="hp-bar"><div class="hp-fill" style="width:${hpPct}%"></div></div>
@@ -139,10 +146,11 @@ function renderEncounter(){
  <div class="detail-line">${esc(c.senses)}${c.languages?` · Languages: ${esc(c.languages)}`:""}</div>
  <div class="action-track">${dots}</div>
  <div class="attack-buttons">${attacks}</div>
- ${(actionList||reactionList||specialList)?`<div class="encounter-ability-grid">
+ ${(actionList||reactionList||specialList||spellList)?`<div class="encounter-ability-grid">
    ${actionList?`<section><h4>Actions</h4>${actionList}</section>`:""}
    ${reactionList?`<section><h4>Reactions</h4>${reactionList}</section>`:""}
    ${specialList?`<section><h4>Abilities</h4>${specialList}</section>`:""}
+   ${spellList?`<section><h4>Spells</h4>${spellList}</section>`:""}
  </div>`:""}
  </article>`}).join(""):`<div class="card">No combatants yet.</div>`;
  bindCards()
