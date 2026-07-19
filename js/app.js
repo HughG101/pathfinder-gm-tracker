@@ -1,700 +1,144 @@
 (() => {
-  "use strict";
-
-  const STORAGE_KEY = "pf2e-gm-tracker-v1";
-  const HOME_BREW_KEY = "pf2e-gm-homebrew-v1";
-
-  const sampleCompendium = [
-    {id:"action-demoralize", category:"action", name:"Demoralize", level:0, traits:["auditory","emotion","fear","mental"], description:"Attempt an Intimidation check against a creature's Will DC. On a success, the target becomes frightened 1; on a critical success, frightened 2."},
-    {id:"action-trip", category:"action", name:"Trip", level:0, traits:["attack"], description:"Attempt an Athletics check against the target's Reflex DC. On a success, the target falls prone."},
-    {id:"spell-fear", category:"spell", name:"Fear", level:1, traits:["emotion","fear","mental"], description:"The target attempts a Will save and may become frightened depending on the degree of success."},
-    {id:"condition-frightened", category:"condition", name:"Frightened", level:0, traits:[], description:"Apply a status penalty equal to the frightened value to checks and DCs. The value normally decreases by 1 at the end of the creature's turn."},
-    {id:"condition-off-guard", category:"condition", name:"Off-Guard", level:0, traits:[], description:"A creature that is off-guard takes a –2 circumstance penalty to AC."},
-    {id:"creature-goblin-warrior", category:"creature", name:"Goblin Warrior (sample)", level:-1, traits:["goblin","humanoid"], description:"Sample creature entry. Use Add to Encounter, then edit statistics as needed.", combatant:{type:"Creature",level:-1,maxHp:6,hp:6,tempHp:0,ac:16,fort:5,ref:8,will:3,perception:5,initiative:5,maxActions:3,attacks:[{name:"Dogslicer",attack:8,damage:"1d6+1",map:"-5/-10"}]}},
-    {id:"hazard-pit", category:"hazard", name:"Simple Pit (sample)", level:0, traits:["mechanical","trap"], description:"A concealed pit that opens when stepped on. Replace with properly licensed statistics for your campaign."},
-    {id:"rune-potency", category:"rune", name:"Weapon Potency Rune", level:2, traits:["magical"], description:"Increases a weapon's item bonus to attack rolls. Higher grades provide larger bonuses."},
-    {id:"loot-healing-potion", category:"loot", name:"Healing Potion (sample)", level:1, traits:["consumable","healing","magical","potion"], description:"A consumable healing item. Enter the appropriate healing dice for the item grade you are using."}
-  ];
-
-  const defaultCombatant = (name = "New Combatant") => ({
-    id: crypto.randomUUID(),
-    name,
-    type: "Creature",
-    level: 1,
-    initiative: 0,
-    maxHp: 20,
-    hp: 20,
-    tempHp: 0,
-    ac: 15,
-    fort: 5,
-    ref: 5,
-    will: 5,
-    perception: 5,
-    maxActions: 3,
-    actionsUsed: 0,
-    reactionUsed: false,
-    spellAttack: 0,
-    spellDc: 10,
-    resistances: "",
-    weaknesses: "",
-    immunities: "",
-    conditions: "",
-    persistent: "",
-    attacks: [{name:"Strike", attack:5, damage:"1d6+2", map:"-5/-10"}],
-    spells: [],
-    slots: Array.from({length: 10}, (_, i) => ({rank:i+1, max:0, used:0})),
-    notes: ""
-  });
-
-  const defaultEncounter = (name = "New Encounter") => ({
-    id: crypto.randomUUID(),
-    name,
-    round: 1,
-    turnIndex: -1,
-    combatants: [],
-    notes: "",
-    loot: []
-  });
-
-  let state = loadState();
-  let selectedCombatantId = null;
-  let homebrew = loadJson(HOME_BREW_KEY, []);
-
-  const $ = id => document.getElementById(id);
-
-  function loadJson(key, fallback) {
-    try {
-      const raw = localStorage.getItem(key);
-      return raw ? JSON.parse(raw) : fallback;
-    } catch {
-      return fallback;
-    }
-  }
-
-  function loadState() {
-    const loaded = loadJson(STORAGE_KEY, null);
-    if (loaded && Array.isArray(loaded.encounters) && loaded.encounters.length) return loaded;
-    return { currentEncounterId: null, encounters: [defaultEncounter("First Encounter")] };
-  }
-
-  function currentEncounter() {
-    let encounter = state.encounters.find(e => e.id === state.currentEncounterId);
-    if (!encounter) {
-      encounter = state.encounters[0];
-      state.currentEncounterId = encounter.id;
-    }
-    return encounter;
-  }
-
-  function saveState(showMessage = false) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    if (showMessage) toast("Saved on this device.");
-  }
-
-  function toast(message) {
-    const el = $("toast");
-    el.textContent = message;
-    el.classList.add("show");
-    clearTimeout(toast.timer);
-    toast.timer = setTimeout(() => el.classList.remove("show"), 2200);
-  }
-
-  function escapeHtml(value) {
-    return String(value ?? "").replace(/[&<>"']/g, ch => ({
-      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
-    })[ch]);
-  }
-
-  function parseDice(expression) {
-    const cleaned = String(expression).replace(/\s+/g, "").toLowerCase();
-    const match = cleaned.match(/^(\d*)d(\d+)([+-]\d+)?$/);
-    if (!match) throw new Error("Use dice format such as 1d20+7.");
-    const count = Number(match[1] || 1);
-    const sides = Number(match[2]);
-    const modifier = Number(match[3] || 0);
-    if (count < 1 || count > 100 || sides < 2 || sides > 1000) throw new Error("Dice expression is outside allowed limits.");
-    const rolls = Array.from({length: count}, () => Math.floor(Math.random() * sides) + 1);
-    return {rolls, modifier, total: rolls.reduce((a,b) => a+b, 0) + modifier};
-  }
-
-  function rollText(expression) {
-    const result = parseDice(expression);
-    const mod = result.modifier ? ` ${result.modifier >= 0 ? "+" : "-"} ${Math.abs(result.modifier)}` : "";
-    return `${expression}: [${result.rolls.join(", ")}]${mod} = ${result.total}`;
-  }
-
-  function renderAll() {
-    renderEncounterSelect();
-    renderEncounter();
-    renderCombatantPicker();
-    renderCombatantEditor();
-    renderCompendium();
-    renderNotesAndLoot();
-    saveState();
-  }
-
-  function renderEncounterSelect() {
-    const select = $("encounterSelect");
-    select.innerHTML = state.encounters.map(e =>
-      `<option value="${e.id}" ${e.id === state.currentEncounterId ? "selected" : ""}>${escapeHtml(e.name)}</option>`
-    ).join("");
-  }
-
-  function renderEncounter() {
-    const encounter = currentEncounter();
-    $("encounterName").value = encounter.name;
-    $("roundValue").textContent = encounter.round;
-    const active = encounter.combatants[encounter.turnIndex];
-    $("turnLabel").textContent = active ? active.name : "No active combatant";
-
-    const list = $("initiativeList");
-    if (!encounter.combatants.length) {
-      list.innerHTML = `<div class="card"><p>No combatants yet. Use <strong>Add Combatant</strong> to begin.</p></div>`;
-      return;
-    }
-
-    list.innerHTML = encounter.combatants.map((c, index) => {
-      const hpPercent = c.maxHp > 0 ? Math.max(0, Math.min(100, c.hp / c.maxHp * 100)) : 0;
-      const actions = Array.from({length: c.maxActions}, (_, i) =>
-        `<button type="button" class="action-dot ${i < c.actionsUsed ? "used" : ""}" data-action-toggle="${c.id}" data-action-index="${i}" title="Toggle action ${i+1}">${i+1}</button>`
-      ).join("");
-      const attacks = (c.attacks || []).map((a, ai) =>
-        `<button type="button" data-roll-attack="${c.id}" data-attack-index="${ai}">${escapeHtml(a.name)} +${Number(a.attack)||0}</button>
-         <button type="button" data-roll-damage="${c.id}" data-attack-index="${ai}">${escapeHtml(a.damage)}</button>`
-      ).join("");
-
-      return `<article class="combatant-card ${index === encounter.turnIndex ? "active-turn" : ""}" data-id="${c.id}">
-        <div class="combatant-top">
-          <div>
-            <div class="combatant-name">${escapeHtml(c.name)}</div>
-            <span class="badge">${escapeHtml(c.type)} · Level ${c.level}</span>
-            ${c.conditions ? `<span class="badge">${escapeHtml(c.conditions)}</span>` : ""}
-          </div>
-          <div><strong>Init ${c.initiative}</strong></div>
-          <div><strong>AC ${c.ac}</strong></div>
-          <button type="button" data-edit-combatant="${c.id}">Edit</button>
-        </div>
-        <div class="hp-bar" aria-label="${escapeHtml(c.name)} hit points"><div class="hp-fill" style="width:${hpPercent}%"></div></div>
-        <div class="combatant-controls">
-          <label>Amount<input type="number" value="1" min="0" data-amount="${c.id}"></label>
-          <button type="button" data-damage="${c.id}">Damage</button>
-          <button type="button" data-heal="${c.id}">Heal</button>
-          <button type="button" data-temp="${c.id}">Temp HP</button>
-          <span><strong>HP ${c.hp}/${c.maxHp}</strong>${c.tempHp ? ` +${c.tempHp} temp` : ""}</span>
-          <button type="button" data-save="${c.id}" data-save-type="fort">Fort +${c.fort}</button>
-          <button type="button" data-save="${c.id}" data-save-type="ref">Ref +${c.ref}</button>
-          <button type="button" data-save="${c.id}" data-save-type="will">Will +${c.will}</button>
-          <button type="button" data-perception="${c.id}">Perception +${c.perception}</button>
-          <button type="button" data-reaction="${c.id}">${c.reactionUsed ? "Reaction Used" : "Reaction Ready"}</button>
-          ${c.persistent ? `<button type="button" data-persistent="${c.id}">Persistent Check</button>` : ""}
-        </div>
-        <div class="action-track">${actions}</div>
-        <div class="attack-list">${attacks}</div>
-      </article>`;
-    }).join("");
-
-    bindEncounterCardEvents();
-  }
-
-  function bindEncounterCardEvents() {
-    document.querySelectorAll("[data-edit-combatant]").forEach(btn => btn.addEventListener("click", () => {
-      selectedCombatantId = btn.dataset.editCombatant;
-      switchTab("combatant");
-      renderCombatantPicker();
-      renderCombatantEditor();
-    }));
-
-    document.querySelectorAll("[data-damage]").forEach(btn => btn.addEventListener("click", () => {
-      const c = getCombatant(btn.dataset.damage);
-      const amount = getAmount(c.id);
-      let remaining = amount;
-      if (c.tempHp > 0) {
-        const absorbed = Math.min(c.tempHp, remaining);
-        c.tempHp -= absorbed;
-        remaining -= absorbed;
-      }
-      c.hp = Math.max(0, c.hp - remaining);
-      renderAll();
-    }));
-
-    document.querySelectorAll("[data-heal]").forEach(btn => btn.addEventListener("click", () => {
-      const c = getCombatant(btn.dataset.heal);
-      c.hp = Math.min(c.maxHp, c.hp + getAmount(c.id));
-      renderAll();
-    }));
-
-    document.querySelectorAll("[data-temp]").forEach(btn => btn.addEventListener("click", () => {
-      const c = getCombatant(btn.dataset.temp);
-      c.tempHp = Math.max(c.tempHp, getAmount(c.id));
-      renderAll();
-    }));
-
-    document.querySelectorAll("[data-action-toggle]").forEach(btn => btn.addEventListener("click", () => {
-      const c = getCombatant(btn.dataset.actionToggle);
-      const index = Number(btn.dataset.actionIndex);
-      c.actionsUsed = index < c.actionsUsed ? index : index + 1;
-      renderAll();
-    }));
-
-    document.querySelectorAll("[data-reaction]").forEach(btn => btn.addEventListener("click", () => {
-      const c = getCombatant(btn.dataset.reaction);
-      c.reactionUsed = !c.reactionUsed;
-      renderAll();
-    }));
-
-    document.querySelectorAll("[data-save]").forEach(btn => btn.addEventListener("click", () => {
-      const c = getCombatant(btn.dataset.save);
-      const key = btn.dataset.saveType;
-      toast(rollText(`1d20+${Number(c[key]) || 0}`));
-    }));
-
-    document.querySelectorAll("[data-perception]").forEach(btn => btn.addEventListener("click", () => {
-      const c = getCombatant(btn.dataset.perception);
-      toast(rollText(`1d20+${Number(c.perception) || 0}`));
-    }));
-
-    document.querySelectorAll("[data-roll-attack]").forEach(btn => btn.addEventListener("click", () => {
-      const c = getCombatant(btn.dataset.rollAttack);
-      const attack = c.attacks[Number(btn.dataset.attackIndex)];
-      toast(`${attack.name}: ${rollText(`1d20+${Number(attack.attack)||0}`)} · MAP ${attack.map || "-5/-10"}`);
-    }));
-
-    document.querySelectorAll("[data-roll-damage]").forEach(btn => btn.addEventListener("click", () => {
-      const c = getCombatant(btn.dataset.rollDamage);
-      const attack = c.attacks[Number(btn.dataset.attackIndex)];
-      try { toast(`${attack.name} damage: ${rollText(attack.damage)}`); }
-      catch (error) { toast(error.message); }
-    }));
-
-    document.querySelectorAll("[data-persistent]").forEach(btn => btn.addEventListener("click", () => {
-      const c = getCombatant(btn.dataset.persistent);
-      const flat = Math.floor(Math.random() * 20) + 1;
-      toast(`${c.name} persistent recovery flat check: ${flat}. Default recovery succeeds on 15+.`);
-    }));
-  }
-
-  function getAmount(id) {
-    const input = document.querySelector(`[data-amount="${id}"]`);
-    return Math.max(0, Number(input?.value) || 0);
-  }
-
-  function getCombatant(id) {
-    return currentEncounter().combatants.find(c => c.id === id);
-  }
-
-  function renderCombatantPicker() {
-    const encounter = currentEncounter();
-    if (!selectedCombatantId && encounter.combatants[0]) selectedCombatantId = encounter.combatants[0].id;
-    $("combatantPicker").innerHTML = encounter.combatants.length
-      ? encounter.combatants.map(c => `<button type="button" data-pick="${c.id}" class="${c.id === selectedCombatantId ? "selected" : ""}">${escapeHtml(c.name)}</button>`).join("")
-      : "<p class='muted'>No combatants.</p>";
-    document.querySelectorAll("[data-pick]").forEach(btn => btn.addEventListener("click", () => {
-      selectedCombatantId = btn.dataset.pick;
-      renderCombatantPicker();
-      renderCombatantEditor();
-    }));
-  }
-
-  function renderCombatantEditor() {
-    const c = getCombatant(selectedCombatantId);
-    const ids = ["cName","cType","cLevel","cInitiative","cMaxHp","cHp","cTempHp","cAc","cFort","cRef","cWill","cPerception","cMaxActions","cSpellAttack","cSpellDc","cResistances","cWeaknesses","cImmunities","cConditions","cPersistent","cNotes"];
-    if (!c) {
-      ids.forEach(id => { if ($(id)) $(id).value = ""; });
-      $("attackEditor").innerHTML = "";
-      $("spellEditor").innerHTML = "";
-      $("slotEditor").innerHTML = "";
-      return;
-    }
-    const map = {
-      cName:"name",cType:"type",cLevel:"level",cInitiative:"initiative",cMaxHp:"maxHp",cHp:"hp",
-      cTempHp:"tempHp",cAc:"ac",cFort:"fort",cRef:"ref",cWill:"will",cPerception:"perception",
-      cMaxActions:"maxActions",cSpellAttack:"spellAttack",cSpellDc:"spellDc",cResistances:"resistances",
-      cWeaknesses:"weaknesses",cImmunities:"immunities",cConditions:"conditions",cPersistent:"persistent",cNotes:"notes"
-    };
-    Object.entries(map).forEach(([id,key]) => $(id).value = c[key] ?? "");
-    renderAttackEditor(c);
-    renderSpellEditor(c);
-    renderSlotEditor(c);
-  }
-
-  function renderAttackEditor(c) {
-    $("attackEditor").innerHTML = (c.attacks || []).map((a, i) => `
-      <div class="attack-row">
-        <label>Name<input data-attack-field="name" data-index="${i}" value="${escapeHtml(a.name)}"></label>
-        <label>Attack bonus<input type="number" data-attack-field="attack" data-index="${i}" value="${Number(a.attack)||0}"></label>
-        <label>Damage<input data-attack-field="damage" data-index="${i}" value="${escapeHtml(a.damage)}"></label>
-        <label>MAP<input data-attack-field="map" data-index="${i}" value="${escapeHtml(a.map || "-5/-10")}"></label>
-        <button type="button" data-remove-attack="${i}">Remove</button>
-      </div>`).join("");
-    document.querySelectorAll("[data-remove-attack]").forEach(btn => btn.addEventListener("click", () => {
-      c.attacks.splice(Number(btn.dataset.removeAttack), 1);
-      renderAttackEditor(c);
-    }));
-  }
-
-  function renderSpellEditor(c) {
-    $("spellEditor").innerHTML = (c.spells || []).map((s, i) => `
-      <div class="spell-row">
-        <label>Name<input data-spell-field="name" data-index="${i}" value="${escapeHtml(s.name)}"></label>
-        <label>Rank<input type="number" data-spell-field="rank" data-index="${i}" value="${Number(s.rank)||1}"></label>
-        <label>Effect<input data-spell-field="effect" data-index="${i}" value="${escapeHtml(s.effect || "")}"></label>
-        <button type="button" data-remove-spell="${i}">Remove</button>
-      </div>`).join("");
-    document.querySelectorAll("[data-remove-spell]").forEach(btn => btn.addEventListener("click", () => {
-      c.spells.splice(Number(btn.dataset.removeSpell), 1);
-      renderSpellEditor(c);
-    }));
-  }
-
-  function renderSlotEditor(c) {
-    $("slotEditor").innerHTML = c.slots.map((slot, i) => `
-      <div class="slot-item">
-        <strong>Rank ${slot.rank}</strong>
-        <label>Maximum<input type="number" min="0" data-slot-max="${i}" value="${slot.max}"></label>
-        <label>Used<input type="number" min="0" data-slot-used="${i}" value="${slot.used}"></label>
-      </div>`).join("");
-  }
-
-  function collectCombatantEditor(c) {
-    const fields = {
-      name:"cName", type:"cType", level:"cLevel", initiative:"cInitiative", maxHp:"cMaxHp", hp:"cHp",
-      tempHp:"cTempHp", ac:"cAc", fort:"cFort", ref:"cRef", will:"cWill", perception:"cPerception",
-      maxActions:"cMaxActions", spellAttack:"cSpellAttack", spellDc:"cSpellDc", resistances:"cResistances",
-      weaknesses:"cWeaknesses", immunities:"cImmunities", conditions:"cConditions", persistent:"cPersistent", notes:"cNotes"
-    };
-    const numeric = new Set(["level","initiative","maxHp","hp","tempHp","ac","fort","ref","will","perception","maxActions","spellAttack","spellDc"]);
-    Object.entries(fields).forEach(([key,id]) => c[key] = numeric.has(key) ? Number($(id).value) || 0 : $(id).value.trim());
-
-    c.attacks = Array.from(document.querySelectorAll("#attackEditor .attack-row")).map((row, i) => ({
-      name: row.querySelector(`[data-attack-field="name"]`).value.trim() || "Strike",
-      attack: Number(row.querySelector(`[data-attack-field="attack"]`).value) || 0,
-      damage: row.querySelector(`[data-attack-field="damage"]`).value.trim() || "1d4",
-      map: row.querySelector(`[data-attack-field="map"]`).value.trim() || "-5/-10"
-    }));
-
-    c.spells = Array.from(document.querySelectorAll("#spellEditor .spell-row")).map(row => ({
-      name: row.querySelector(`[data-spell-field="name"]`).value.trim() || "Spell",
-      rank: Number(row.querySelector(`[data-spell-field="rank"]`).value) || 1,
-      effect: row.querySelector(`[data-spell-field="effect"]`).value.trim()
-    }));
-
-    c.slots = c.slots.map((slot, i) => ({
-      rank: slot.rank,
-      max: Number(document.querySelector(`[data-slot-max="${i}"]`)?.value) || 0,
-      used: Number(document.querySelector(`[data-slot-used="${i}"]`)?.value) || 0
-    }));
-  }
-
-  function allCompendium() {
-    return [...sampleCompendium, ...homebrew];
-  }
-
-  function renderCompendium() {
-    const query = $("compendiumSearch").value.trim().toLowerCase();
-    const category = $("compendiumCategory").value;
-    const entries = allCompendium().filter(entry => {
-      const categoryMatch = category === "all" || entry.category === category;
-      const haystack = `${entry.name} ${entry.description} ${(entry.traits || []).join(" ")}`.toLowerCase();
-      return categoryMatch && haystack.includes(query);
-    });
-
-    $("compendiumResults").innerHTML = entries.length ? entries.map(entry => `
-      <article class="compendium-entry">
-        <h3>${escapeHtml(entry.name)}</h3>
-        <span class="badge">${escapeHtml(entry.category)}${entry.level !== undefined ? ` · Level ${entry.level}` : ""}</span>
-        ${(entry.traits || []).map(t => `<span class="badge">${escapeHtml(t)}</span>`).join(" ")}
-        <p>${escapeHtml(entry.description)}</p>
-        <div class="entry-actions">
-          ${entry.category === "creature" ? `<button type="button" data-add-creature="${entry.id}">Add to Encounter</button>` : ""}
-          ${entry.category === "loot" ? `<button type="button" data-add-entry-loot="${entry.id}">Add to Loot</button>` : ""}
-          ${entry.category === "action" || entry.category === "spell" || entry.category === "rune" ? `<button type="button" data-copy-entry="${entry.id}">Copy Details</button>` : ""}
-        </div>
-      </article>`).join("") : "<p>No matching entries.</p>";
-
-    document.querySelectorAll("[data-add-creature]").forEach(btn => btn.addEventListener("click", () => {
-      const entry = allCompendium().find(e => e.id === btn.dataset.addCreature);
-      const c = {...defaultCombatant(entry.name), ...(entry.combatant || {})};
-      c.id = crypto.randomUUID();
-      currentEncounter().combatants.push(c);
-      selectedCombatantId = c.id;
-      renderAll();
-      toast(`${c.name} added.`);
-    }));
-
-    document.querySelectorAll("[data-add-entry-loot]").forEach(btn => btn.addEventListener("click", () => {
-      const entry = allCompendium().find(e => e.id === btn.dataset.addEntryLoot);
-      currentEncounter().loot.push({id:crypto.randomUUID(), name:entry.name, quantity:1, notes:entry.description});
-      renderAll();
-      toast("Loot added.");
-    }));
-
-    document.querySelectorAll("[data-copy-entry]").forEach(btn => btn.addEventListener("click", () => {
-      const entry = allCompendium().find(e => e.id === btn.dataset.copyEntry);
-      toast(`${entry.name}: ${entry.description}`);
-    }));
-  }
-
-  function renderNotesAndLoot() {
-    const encounter = currentEncounter();
-    $("encounterNotes").value = encounter.notes || "";
-    $("lootList").innerHTML = encounter.loot.length ? encounter.loot.map((item, i) => `
-      <div class="loot-row">
-        <label>Item<input data-loot-name="${i}" value="${escapeHtml(item.name)}"></label>
-        <label>Quantity<input type="number" min="0" data-loot-qty="${i}" value="${Number(item.quantity)||1}"></label>
-        <label>Notes<input data-loot-notes="${i}" value="${escapeHtml(item.notes || "")}"></label>
-        <span></span>
-        <button type="button" data-remove-loot="${i}">Remove</button>
-      </div>`).join("") : "<p class='muted'>No treasure added.</p>";
-
-    document.querySelectorAll("[data-remove-loot]").forEach(btn => btn.addEventListener("click", () => {
-      encounter.loot.splice(Number(btn.dataset.removeLoot), 1);
-      renderAll();
-    }));
-  }
-
-  function switchTab(name) {
-    document.querySelectorAll(".tab").forEach(btn => btn.classList.toggle("active", btn.dataset.tab === name));
-    document.querySelectorAll(".tab-panel").forEach(panel => panel.classList.remove("active"));
-    $(`${name}Tab`).classList.add("active");
-  }
-
-  document.querySelectorAll(".tab").forEach(btn => btn.addEventListener("click", () => switchTab(btn.dataset.tab)));
-
-  $("newEncounterBtn").addEventListener("click", () => {
-    const encounter = defaultEncounter(`Encounter ${state.encounters.length + 1}`);
-    state.encounters.push(encounter);
-    state.currentEncounterId = encounter.id;
-    selectedCombatantId = null;
-    renderAll();
-  });
-
-  $("saveBtn").addEventListener("click", () => {
-    const c = getCombatant(selectedCombatantId);
-    if (c && $("combatantTab").classList.contains("active")) collectCombatantEditor(c);
-    currentEncounter().name = $("encounterName").value.trim() || "Untitled Encounter";
-    currentEncounter().notes = $("encounterNotes").value;
-    collectLoot();
-    saveState(true);
-    renderAll();
-  });
-
-  $("encounterSelect").addEventListener("change", e => {
-    state.currentEncounterId = e.target.value;
-    selectedCombatantId = null;
-    renderAll();
-  });
-
-  $("encounterName").addEventListener("change", e => {
-    currentEncounter().name = e.target.value.trim() || "Untitled Encounter";
-    renderAll();
-  });
-
-  $("duplicateEncounterBtn").addEventListener("click", () => {
-    const copy = structuredClone(currentEncounter());
-    copy.id = crypto.randomUUID();
-    copy.name += " Copy";
-    copy.combatants.forEach(c => c.id = crypto.randomUUID());
-    copy.loot.forEach(l => l.id = crypto.randomUUID());
-    state.encounters.push(copy);
-    state.currentEncounterId = copy.id;
-    selectedCombatantId = null;
-    renderAll();
-  });
-
-  $("deleteEncounterBtn").addEventListener("click", () => {
-    if (state.encounters.length === 1) {
-      toast("At least one encounter must remain.");
-      return;
-    }
-    const id = currentEncounter().id;
-    state.encounters = state.encounters.filter(e => e.id !== id);
-    state.currentEncounterId = state.encounters[0].id;
-    selectedCombatantId = null;
-    renderAll();
-  });
-
-  $("sortInitiativeBtn").addEventListener("click", () => {
-    const encounter = currentEncounter();
-    encounter.combatants.sort((a,b) => b.initiative - a.initiative || b.perception - a.perception);
-    encounter.turnIndex = encounter.combatants.length ? 0 : -1;
-    renderAll();
-  });
-
-  $("nextTurnBtn").addEventListener("click", () => {
-    const e = currentEncounter();
-    if (!e.combatants.length) return;
-    if (e.turnIndex >= 0) {
-      const old = e.combatants[e.turnIndex];
-      old.actionsUsed = 0;
-      old.reactionUsed = false;
-      if (old.conditions) {
-        old.conditions = old.conditions.replace(/frightened\s+(\d+)/i, (_, n) => {
-          const next = Math.max(0, Number(n) - 1);
-          return next ? `frightened ${next}` : "";
-        }).replace(/\s*,\s*,/g, ",").replace(/^,\s*|,\s*$/g, "").trim();
-      }
-    }
-    e.turnIndex++;
-    if (e.turnIndex >= e.combatants.length) {
-      e.turnIndex = 0;
-      e.round++;
-    }
-    renderAll();
-  });
-
-  $("prevTurnBtn").addEventListener("click", () => {
-    const e = currentEncounter();
-    if (!e.combatants.length) return;
-    e.turnIndex--;
-    if (e.turnIndex < 0) {
-      e.turnIndex = e.combatants.length - 1;
-      e.round = Math.max(1, e.round - 1);
-    }
-    renderAll();
-  });
-
-  $("addCombatantBtn").addEventListener("click", () => {
-    const c = defaultCombatant();
-    currentEncounter().combatants.push(c);
-    selectedCombatantId = c.id;
-    renderAll();
-    switchTab("combatant");
-  });
-
-  $("applyCombatantBtn").addEventListener("click", () => {
-    const c = getCombatant(selectedCombatantId);
-    if (!c) return;
-    collectCombatantEditor(c);
-    saveState();
-    renderAll();
-    toast("Combatant updated.");
-  });
-
-  $("deleteCombatantBtn").addEventListener("click", () => {
-    const e = currentEncounter();
-    e.combatants = e.combatants.filter(c => c.id !== selectedCombatantId);
-    selectedCombatantId = e.combatants[0]?.id || null;
-    e.turnIndex = Math.min(e.turnIndex, e.combatants.length - 1);
-    renderAll();
-  });
-
-  $("addAttackBtn").addEventListener("click", () => {
-    const c = getCombatant(selectedCombatantId);
-    if (!c) return;
-    collectCombatantEditor(c);
-    c.attacks.push({name:"New Attack", attack:0, damage:"1d6", map:"-5/-10"});
-    renderCombatantEditor();
-  });
-
-  $("addSpellBtn").addEventListener("click", () => {
-    const c = getCombatant(selectedCombatantId);
-    if (!c) return;
-    collectCombatantEditor(c);
-    c.spells.push({name:"New Spell", rank:1, effect:""});
-    renderCombatantEditor();
-  });
-
-  $("quickRollBtn").addEventListener("click", () => {
-    try { $("quickRollOutput").textContent = rollText($("quickDice").value); }
-    catch (error) { $("quickRollOutput").textContent = error.message; }
-  });
-
-  $("quickDice").addEventListener("keydown", e => {
-    if (e.key === "Enter") $("quickRollBtn").click();
-  });
-
-  $("compendiumSearch").addEventListener("input", renderCompendium);
-  $("compendiumCategory").addEventListener("change", renderCompendium);
-
-  $("addHomebrewBtn").addEventListener("click", () => $("homebrewDialog").showModal());
-  $("cancelHomebrewBtn").addEventListener("click", () => $("homebrewDialog").close());
-  $("saveHomebrewBtn").addEventListener("click", () => {
-    const name = $("hbName").value.trim();
-    if (!name) return toast("Homebrew name is required.");
-    homebrew.push({
-      id: crypto.randomUUID(),
-      name,
-      category: $("hbCategory").value,
-      level: Number($("hbLevel").value) || 0,
-      traits: $("hbTraits").value.split(",").map(t => t.trim()).filter(Boolean),
-      description: $("hbDescription").value.trim(),
-      homebrew: true
-    });
-    localStorage.setItem(HOME_BREW_KEY, JSON.stringify(homebrew));
-    $("homebrewDialog").close();
-    ["hbName","hbTraits","hbDescription"].forEach(id => $(id).value = "");
-    renderCompendium();
-    toast("Homebrew entry saved.");
-  });
-
-  $("addLootBtn").addEventListener("click", () => {
-    collectLoot();
-    currentEncounter().loot.push({id:crypto.randomUUID(), name:"New Loot", quantity:1, notes:""});
-    renderNotesAndLoot();
-  });
-
-  $("encounterNotes").addEventListener("change", e => {
-    currentEncounter().notes = e.target.value;
-    saveState();
-  });
-
-  function collectLoot() {
-    const e = currentEncounter();
-    e.loot = e.loot.map((item, i) => ({
-      ...item,
-      name: document.querySelector(`[data-loot-name="${i}"]`)?.value ?? item.name,
-      quantity: Number(document.querySelector(`[data-loot-qty="${i}"]`)?.value) || 0,
-      notes: document.querySelector(`[data-loot-notes="${i}"]`)?.value ?? item.notes
-    }));
-  }
-
-  $("exportBtn").addEventListener("click", () => {
-    const c = getCombatant(selectedCombatantId);
-    if (c && $("combatantTab").classList.contains("active")) collectCombatantEditor(c);
-    collectLoot();
-    currentEncounter().notes = $("encounterNotes").value;
-    saveState();
-    const exportData = {version:1, exportedAt:new Date().toISOString(), state, homebrew};
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], {type:"application/json"});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `pf2e-gm-tracker-${new Date().toISOString().slice(0,10)}.json`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-    toast("Export created.");
-  });
-
-  $("importInput").addEventListener("change", async e => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      const imported = JSON.parse(await file.text());
-      if (!imported.state?.encounters || !Array.isArray(imported.state.encounters)) throw new Error("Invalid tracker file.");
-      state = imported.state;
-      homebrew = Array.isArray(imported.homebrew) ? imported.homebrew : homebrew;
-      localStorage.setItem(HOME_BREW_KEY, JSON.stringify(homebrew));
-      selectedCombatantId = null;
-      renderAll();
-      toast("Import complete.");
-    } catch (error) {
-      toast(error.message || "Import failed.");
-    } finally {
-      e.target.value = "";
-    }
-  });
-
-  window.addEventListener("beforeunload", () => {
-    try {
-      const c = getCombatant(selectedCombatantId);
-      if (c && $("combatantTab").classList.contains("active")) collectCombatantEditor(c);
-      collectLoot();
-      currentEncounter().notes = $("encounterNotes").value;
-      saveState();
-    } catch {}
-  });
-
-  renderAll();
+"use strict";
+const KEY="pf2e-gm-tracker-v2";
+const $=id=>document.getElementById(id);
+const uid=()=>crypto.randomUUID();
+const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
+
+function defaultCombatant(name="New Combatant"){
+ return {id:uid(),name,type:"Creature",level:1,initiative:0,maxHp:20,hp:20,tempHp:0,ac:15,speed:"25 ft.",perception:0,
+ maxActions:3,actionsUsed:0,reactionUsed:false,focusPoints:0,senses:"",languages:"",fort:0,ref:0,will:0,
+ resistances:"",weaknesses:"",immunities:"",conditions:"",persistent:"",
+ abilities:{str:0,dex:0,con:0,int:0,wis:0,cha:0},skills:[],items:[],attacks:[],actions:[],reactions:[],specialAbilities:[],
+ spellAttack:0,spellDc:10,spells:[],notes:""};
+}
+function redSunSample(){
+ const c=defaultCombatant("Red Sun Illusionist");
+ Object.assign(c,{type:"NPC",level:4,initiative:12,maxHp:78,hp:78,ac:21,speed:"30 ft.",perception:10,focusPoints:1,
+ senses:"low-light vision, scent (imprecise 30 ft.)",languages:"Common, Sylvan, Thieves’ Cant, Kitsune",
+ fort:8,ref:11,will:9,resistances:"precision 5, mental 5",immunities:"controlled (under Mirror Trick)",
+ abilities:{str:1,dex:4,con:2,int:1,wis:2,cha:4},spellAttack:9,spellDc:19});
+ c.skills=[["Acrobatics",10],["Deception",12],["Stealth",10],["Intimidation",9],["Thievery",10],["Society",7]].map(([name,modifier])=>({id:uid(),name,modifier}));
+ c.items=["Flintlock pistol (6 rounds)","2 alchemical shots (blinding/concussive)","Dagger (concealed)","Smokestick","Minor healing potion","Red Sun pendant (25 gp)"].map(name=>({id:uid(),name,quantity:1,notes:""}));
+ c.attacks=[
+ {id:uid(),name:"Dagger",actionCost:1,attack:11,traits:"agile, finesse, deadly d6",damage:"1d4+4",damageType:"piercing",range:"melee",reload:"",ammo:"",special:"1d6 precision vs off-guard; 1d6 persistent bleed from poisoned blade once per turn"},
+ {id:uid(),name:"Flintlock Pistol",actionCost:1,attack:12,traits:"fatal d10",damage:"1d6+4",damageType:"piercing",range:"60 ft.",reload:"1",ammo:"6 rounds; 2 alchemical shots",special:"Blinding Shot: DC 18 Fortitude. Concussive Shot: dazzled and –1 attack."}
+ ];
+ c.actions=[
+ {id:uid(),name:"Misdirecting Strike",cost:1,traits:"",trigger:"If the last attack hit",effect:"Roll Deception vs. Perception DC. On success, the target is off-guard to allies."},
+ {id:uid(),name:"Vanish in Smoke",cost:2,traits:"illusion",trigger:"1/encounter",effect:"Use a smokestick and cast Invisibility."},
+ {id:uid(),name:"Mirror Trick",cost:1,traits:"illusion",trigger:"Active at encounter start",effect:"DC 19 flat check to hit the real body. Ends on a critical hit or successful Seek against DC 21."}
+ ];
+ c.reactions=[{id:uid(),name:"Smoke-Step Feint",trigger:"When targeted",effect:"Roll Deception vs. Perception DC. On success, the attack misses, the target is off-guard, and this creature can Step."}];
+ c.specialAbilities=[
+ {id:uid(),name:"Illusory Instinct",category:"Interaction",effect:"+2 to Initiative and Stealth while illusion spells are active."},
+ {id:uid(),name:"Surprise Attack",category:"Interaction",effect:"Enemies are off-guard in the first round if they have not acted."}
+ ];
+ c.spells=[
+ {id:uid(),name:"Mirror Image",rank:"2",type:"Innate Arcane",actionCost:"2",effect:""},
+ {id:uid(),name:"Invisibility",rank:"2",type:"Innate Arcane",actionCost:"2",effect:""},
+ {id:uid(),name:"Illusory Disguise",rank:"1",type:"Innate Arcane",actionCost:"2",effect:""},
+ {id:uid(),name:"Color Spray",rank:"1",type:"Innate Arcane",actionCost:"2",effect:""},
+ {id:uid(),name:"Daze",rank:"Cantrip",type:"Innate Arcane",actionCost:"2",effect:""},
+ {id:uid(),name:"Ghost Sound",rank:"Cantrip",type:"Innate Arcane",actionCost:"2",effect:""},
+ {id:uid(),name:"Shield",rank:"Cantrip",type:"Innate Arcane",actionCost:"1",effect:""},
+ {id:uid(),name:"Prestidigitation",rank:"Cantrip",type:"Innate Arcane",actionCost:"2",effect:""},
+ {id:uid(),name:"Foxfire",rank:"Focus 1",type:"Focus",actionCost:"1",effect:"1d6 fire; +1 to the next Deception or Stealth check."}
+ ];
+ return c;
+}
+function defaultEncounter(name="New Encounter"){return{id:uid(),name,round:1,turnIndex:-1,combatants:[redSunSample()],notes:"",loot:[]}}
+let state=load(),selectedId=null;
+function load(){try{const x=JSON.parse(localStorage.getItem(KEY));if(x?.encounters?.length)return x}catch{} const e=defaultEncounter("Sample Encounter");return{currentEncounterId:e.id,encounters:[e]}}
+function encounter(){let e=state.encounters.find(x=>x.id===state.currentEncounterId);if(!e){e=state.encounters[0];state.currentEncounterId=e.id}return e}
+function combatant(){return encounter().combatants.find(c=>c.id===selectedId)}
+function save(msg=false){localStorage.setItem(KEY,JSON.stringify(state));if(msg)toast("Saved on this device.")}
+function toast(t){$("toast").textContent=t;$("toast").classList.add("show");clearTimeout(toast.t);toast.t=setTimeout(()=>$("toast").classList.remove("show"),2200)}
+function roll(expr){const m=String(expr).replace(/\s/g,"").match(/^(\d*)d(\d+)([+-]\d+)?$/i);if(!m)throw Error("Use a format such as 1d20+7.");const n=+m[1]||1,s=+m[2],mod=+m[3]||0;if(n<1||n>100||s<2)throw Error("Invalid dice.");const rs=Array.from({length:n},()=>Math.floor(Math.random()*s)+1);return`${expr}: [${rs.join(", ")}]${mod?` ${mod>=0?"+":"-"} ${Math.abs(mod)}`:""} = ${rs.reduce((a,b)=>a+b,0)+mod}`}
+function render(){renderSelect();renderEncounter();renderPicker();renderBuilder();renderNotes();save()}
+function renderSelect(){$("encounterSelect").innerHTML=state.encounters.map(e=>`<option value="${e.id}" ${e.id===state.currentEncounterId?"selected":""}>${esc(e.name)}</option>`).join("")}
+function renderEncounter(){
+ const e=encounter();$("encounterName").value=e.name;$("roundValue").textContent=e.round;$("turnLabel").textContent=e.combatants[e.turnIndex]?.name||"No active combatant";
+ $("initiativeList").innerHTML=e.combatants.length?e.combatants.map((c,i)=>{
+ const hpPct=c.maxHp?Math.max(0,Math.min(100,c.hp/c.maxHp*100)):0;
+ const dots=Array.from({length:c.maxActions},(_,j)=>`<button class="action-dot ${j<c.actionsUsed?"used":""}" data-action="${c.id}" data-i="${j}" type="button">${j+1}</button>`).join("");
+ const attacks=c.attacks.map((a,j)=>`<button type="button" data-atk="${c.id}" data-ai="${j}">${esc(a.name)} +${a.attack}</button><button type="button" data-dmg="${c.id}" data-ai="${j}">${esc(a.damage)}</button>`).join("");
+ return`<article class="combatant-card ${i===e.turnIndex?"active-turn":""}">
+ <div class="combatant-top"><div><div class="combatant-name">${esc(c.name)}</div><span class="badge">${esc(c.type)} · Level ${c.level}</span></div><strong>Init ${c.initiative}</strong><strong>AC ${c.ac}</strong><button data-edit="${c.id}" type="button">Edit</button></div>
+ <div class="hp-bar"><div class="hp-fill" style="width:${hpPct}%"></div></div>
+ <div class="combatant-controls"><label>Amount<input data-amount="${c.id}" type="number" value="1" min="0"></label><button data-hurt="${c.id}">Damage</button><button data-heal="${c.id}">Heal</button><button data-temp="${c.id}">Temp HP</button><strong>HP ${c.hp}/${c.maxHp}${c.tempHp?` +${c.tempHp} temp`:""}</strong><button data-save="${c.id}" data-kind="fort">Fort +${c.fort}</button><button data-save="${c.id}" data-kind="ref">Ref +${c.ref}</button><button data-save="${c.id}" data-kind="will">Will +${c.will}</button><button data-per="${c.id}">Perception +${c.perception}</button><button data-react="${c.id}">${c.reactionUsed?"Reaction Used":"Reaction Ready"}</button></div>
+ <div class="detail-line">${esc(c.senses)}${c.languages?` · Languages: ${esc(c.languages)}`:""}</div><div class="action-track">${dots}</div><div class="attack-buttons">${attacks}</div></article>`}).join(""):`<div class="card">No combatants yet.</div>`;
+ bindCards()
+}
+function bindCards(){
+ document.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>{selectedId=b.dataset.edit;tab("builder");renderPicker();renderBuilder()});
+ document.querySelectorAll("[data-hurt]").forEach(b=>b.onclick=()=>{const c=find(b.dataset.hurt),n=amount(c.id);let r=n;if(c.tempHp){const a=Math.min(c.tempHp,r);c.tempHp-=a;r-=a}c.hp=Math.max(0,c.hp-r);render()});
+ document.querySelectorAll("[data-heal]").forEach(b=>b.onclick=()=>{const c=find(b.dataset.heal);c.hp=Math.min(c.maxHp,c.hp+amount(c.id));render()});
+ document.querySelectorAll("[data-temp]").forEach(b=>b.onclick=()=>{const c=find(b.dataset.temp);c.tempHp=Math.max(c.tempHp,amount(c.id));render()});
+ document.querySelectorAll("[data-action]").forEach(b=>b.onclick=()=>{const c=find(b.dataset.action),i=+b.dataset.i;c.actionsUsed=i<c.actionsUsed?i:i+1;render()});
+ document.querySelectorAll("[data-react]").forEach(b=>b.onclick=()=>{const c=find(b.dataset.react);c.reactionUsed=!c.reactionUsed;render()});
+ document.querySelectorAll("[data-save]").forEach(b=>b.onclick=()=>{const c=find(b.dataset.save);toast(roll(`1d20+${c[b.dataset.kind]}`))});
+ document.querySelectorAll("[data-per]").forEach(b=>b.onclick=()=>toast(roll(`1d20+${find(b.dataset.per).perception}`)));
+ document.querySelectorAll("[data-atk]").forEach(b=>b.onclick=()=>{const a=find(b.dataset.atk).attacks[+b.dataset.ai];toast(`${a.name}: ${roll(`1d20+${a.attack}`)}`)});
+ document.querySelectorAll("[data-dmg]").forEach(b=>b.onclick=()=>{const a=find(b.dataset.dmg).attacks[+b.dataset.ai];try{toast(`${a.name}: ${roll(a.damage)}`)}catch(e){toast(e.message)}})
+}
+const find=id=>encounter().combatants.find(c=>c.id===id);
+const amount=id=>Math.max(0,+document.querySelector(`[data-amount="${id}"]`)?.value||0);
+function renderPicker(){const e=encounter();if(!selectedId&&e.combatants[0])selectedId=e.combatants[0].id;$("combatantPicker").innerHTML=e.combatants.map(c=>`<button data-pick="${c.id}" class="${c.id===selectedId?"selected":""}">${esc(c.name)}</button>`).join("")||"<p>No combatants.</p>";document.querySelectorAll("[data-pick]").forEach(b=>b.onclick=()=>{selectedId=b.dataset.pick;renderPicker();renderBuilder()})}
+const scalarMap={cName:"name",cType:"type",cLevel:"level",cInitiative:"initiative",cMaxHp:"maxHp",cHp:"hp",cTempHp:"tempHp",cAc:"ac",cSpeed:"speed",cPerception:"perception",cMaxActions:"maxActions",cFocusPoints:"focusPoints",cSenses:"senses",cLanguages:"languages",cFort:"fort",cRef:"ref",cWill:"will",cResistances:"resistances",cWeaknesses:"weaknesses",cImmunities:"immunities",cConditions:"conditions",cPersistent:"persistent",cSpellAttack:"spellAttack",cSpellDc:"spellDc",cNotes:"notes"};
+const nums=new Set(["level","initiative","maxHp","hp","tempHp","ac","perception","maxActions","focusPoints","fort","ref","will","spellAttack","spellDc"]);
+function renderBuilder(){const c=combatant();if(!c)return;Object.entries(scalarMap).forEach(([id,k])=>$(id).value=c[k]??"");["str","dex","con","int","wis","cha"].forEach(k=>$("c"+k[0].toUpperCase()+k.slice(1)).value=c.abilities[k]??0);
+ renderSkills(c);renderItems(c);renderAttacks(c);renderGeneric("actionsEditor",c.actions,"action");renderGeneric("reactionsEditor",c.reactions,"reaction");renderGeneric("abilitiesEditor",c.specialAbilities,"ability");renderSpells(c)}
+function removeButton(type,i){return`<button type="button" data-remove="${type}" data-index="${i}">Remove</button>`}
+function bindRemoves(c){document.querySelectorAll("[data-remove]").forEach(b=>b.onclick=()=>{const key={skill:"skills",item:"items",attack:"attacks",action:"actions",reaction:"reactions",ability:"specialAbilities",spell:"spells"}[b.dataset.remove];c[key].splice(+b.dataset.index,1);renderBuilder()})}
+function renderSkills(c){$("skillsEditor").innerHTML=c.skills.map((s,i)=>`<div class="editor-row wide"><label>Name<input data-skill-name="${i}" value="${esc(s.name)}"></label><label>Modifier<input type="number" data-skill-mod="${i}" value="${s.modifier}"></label>${removeButton("skill",i)}</div>`).join("");bindRemoves(c)}
+function renderItems(c){$("itemsEditor").innerHTML=c.items.map((x,i)=>`<div class="editor-row"><label>Name<input data-item-name="${i}" value="${esc(x.name)}"></label><label>Quantity<input type="number" data-item-qty="${i}" value="${x.quantity}"></label><label class="full">Notes<input data-item-notes="${i}" value="${esc(x.notes)}"></label>${removeButton("item",i)}</div>`).join("");bindRemoves(c)}
+function renderAttacks(c){$("attacksEditor").innerHTML=c.attacks.map((a,i)=>`<div class="editor-row">
+<label>Name / homebrew name<input data-at-name="${i}" value="${esc(a.name)}"></label><label>Action cost<input type="number" min="0" data-at-cost="${i}" value="${a.actionCost}"></label><label>Attack bonus<input type="number" data-at-bonus="${i}" value="${a.attack}"></label><label>Traits<input data-at-traits="${i}" value="${esc(a.traits)}"></label>
+<label>Damage dice<input data-at-damage="${i}" value="${esc(a.damage)}"></label><label>Damage type<input data-at-type="${i}" value="${esc(a.damageType)}"></label><label>Range<input data-at-range="${i}" value="${esc(a.range)}"></label><label>Reload<input data-at-reload="${i}" value="${esc(a.reload)}"></label>
+<label>Ammunition<input data-at-ammo="${i}" value="${esc(a.ammo)}"></label><label class="full">Special effects<input data-at-special="${i}" value="${esc(a.special)}"></label>${removeButton("attack",i)}</div>`).join("");bindRemoves(c)}
+function renderGeneric(id,list,type){$(id).innerHTML=list.map((x,i)=>`<div class="editor-row"><label>Name<input data-${type}-name="${i}" value="${esc(x.name)}"></label>${type==="action"?`<label>Action cost<input type="number" min="0" data-action-cost="${i}" value="${x.cost}"></label><label>Traits<input data-action-traits="${i}" value="${esc(x.traits)}"></label>`:""}${type==="ability"?`<label>Category<input data-ability-category="${i}" value="${esc(x.category)}"></label>`:""}<label>Trigger / usage<input data-${type}-trigger="${i}" value="${esc(x.trigger||"")}"></label><label class="full">Effect<input data-${type}-effect="${i}" value="${esc(x.effect)}"></label>${removeButton(type,i)}</div>`).join("");bindRemoves(combatant())}
+function renderSpells(c){$("spellsEditor").innerHTML=c.spells.map((s,i)=>`<div class="editor-row"><label>Name<input data-sp-name="${i}" value="${esc(s.name)}"></label><label>Rank<input data-sp-rank="${i}" value="${esc(s.rank)}"></label><label>Type<input data-sp-type="${i}" value="${esc(s.type)}"></label><label>Action cost<input data-sp-cost="${i}" value="${esc(s.actionCost)}"></label><label class="full">Effect<input data-sp-effect="${i}" value="${esc(s.effect)}"></label>${removeButton("spell",i)}</div>`).join("");bindRemoves(c)}
+function collect(){
+ const c=combatant();if(!c)return;Object.entries(scalarMap).forEach(([id,k])=>c[k]=nums.has(k)?+$ (id).value||0:$(id).value.trim());["str","dex","con","int","wis","cha"].forEach(k=>c.abilities[k]=+$("c"+k[0].toUpperCase()+k.slice(1)).value||0);
+ c.skills=c.skills.map((s,i)=>({...s,name:document.querySelector(`[data-skill-name="${i}"]`)?.value||s.name,modifier:+document.querySelector(`[data-skill-mod="${i}"]`)?.value||0}));
+ c.items=c.items.map((x,i)=>({...x,name:val(`item-name`,i,x.name),quantity:+val(`item-qty`,i,x.quantity)||0,notes:val(`item-notes`,i,x.notes)}));
+ c.attacks=c.attacks.map((a,i)=>({...a,name:val("at-name",i,a.name),actionCost:+val("at-cost",i,a.actionCost)||0,attack:+val("at-bonus",i,a.attack)||0,traits:val("at-traits",i,a.traits),damage:val("at-damage",i,a.damage),damageType:val("at-type",i,a.damageType),range:val("at-range",i,a.range),reload:val("at-reload",i,a.reload),ammo:val("at-ammo",i,a.ammo),special:val("at-special",i,a.special)}));
+ c.actions=c.actions.map((x,i)=>({...x,name:val("action-name",i,x.name),cost:+val("action-cost",i,x.cost)||0,traits:val("action-traits",i,x.traits),trigger:val("action-trigger",i,x.trigger),effect:val("action-effect",i,x.effect)}));
+ c.reactions=c.reactions.map((x,i)=>({...x,name:val("reaction-name",i,x.name),trigger:val("reaction-trigger",i,x.trigger),effect:val("reaction-effect",i,x.effect)}));
+ c.specialAbilities=c.specialAbilities.map((x,i)=>({...x,name:val("ability-name",i,x.name),category:val("ability-category",i,x.category),trigger:val("ability-trigger",i,x.trigger),effect:val("ability-effect",i,x.effect)}));
+ c.spells=c.spells.map((x,i)=>({...x,name:val("sp-name",i,x.name),rank:val("sp-rank",i,x.rank),type:val("sp-type",i,x.type),actionCost:val("sp-cost",i,x.actionCost),effect:val("sp-effect",i,x.effect)}))
+}
+function val(key,i,fallback=""){return document.querySelector(`[data-${key}="${i}"]`)?.value??fallback}
+function tab(name){document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("active",b.dataset.tab===name));document.querySelectorAll(".tab-panel").forEach(p=>p.classList.remove("active"));$(name+"Tab").classList.add("active")}
+document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>tab(b.dataset.tab));
+function addC(){const c=defaultCombatant();encounter().combatants.push(c);selectedId=c.id;render();tab("builder")}
+$("addCombatantBtn").onclick=addC;$("addCombatantSideBtn").onclick=addC;
+$("applyCombatantBtn").onclick=()=>{collect();render();toast("Combatant updated.")};
+$("deleteCombatantBtn").onclick=()=>{const e=encounter();e.combatants=e.combatants.filter(c=>c.id!==selectedId);selectedId=e.combatants[0]?.id||null;e.turnIndex=Math.min(e.turnIndex,e.combatants.length-1);render()};
+$("addSkillBtn").onclick=()=>{collect();combatant().skills.push({id:uid(),name:"New Skill",modifier:0});renderBuilder()};
+$("addItemBtn").onclick=()=>{collect();combatant().items.push({id:uid(),name:"New Item",quantity:1,notes:""});renderBuilder()};
+$("addAttackBtn").onclick=()=>{collect();combatant().attacks.push({id:uid(),name:"Homebrew Attack",actionCost:1,attack:0,traits:"",damage:"1d6",damageType:"",range:"",reload:"",ammo:"",special:""});renderBuilder()};
+$("addActionBtn").onclick=()=>{collect();combatant().actions.push({id:uid(),name:"New Action",cost:1,traits:"",trigger:"",effect:""});renderBuilder()};
+$("addReactionBtn").onclick=()=>{collect();combatant().reactions.push({id:uid(),name:"New Reaction",trigger:"",effect:""});renderBuilder()};
+$("addAbilityBtn").onclick=()=>{collect();combatant().specialAbilities.push({id:uid(),name:"New Ability",category:"Automatic",trigger:"",effect:""});renderBuilder()};
+$("addSpellBtn").onclick=()=>{collect();combatant().spells.push({id:uid(),name:"New Spell",rank:"1",type:"Prepared",actionCost:"2",effect:""});renderBuilder()};
+$("newEncounterBtn").onclick=()=>{const e=defaultEncounter(`Encounter ${state.encounters.length+1}`);state.encounters.push(e);state.currentEncounterId=e.id;selectedId=null;render()};
+$("encounterSelect").onchange=e=>{state.currentEncounterId=e.target.value;selectedId=null;render()};
+$("encounterName").onchange=e=>{encounter().name=e.target.value.trim()||"Untitled Encounter";render()};
+$("duplicateEncounterBtn").onclick=()=>{const e=structuredClone(encounter());e.id=uid();e.name+=" Copy";e.combatants.forEach(c=>c.id=uid());state.encounters.push(e);state.currentEncounterId=e.id;selectedId=null;render()};
+$("deleteEncounterBtn").onclick=()=>{if(state.encounters.length===1)return toast("At least one encounter must remain.");state.encounters=state.encounters.filter(e=>e.id!==encounter().id);state.currentEncounterId=state.encounters[0].id;selectedId=null;render()};
+$("sortInitiativeBtn").onclick=()=>{const e=encounter();e.combatants.sort((a,b)=>b.initiative-a.initiative||b.perception-a.perception);e.turnIndex=e.combatants.length?0:-1;render()};
+$("nextTurnBtn").onclick=()=>{const e=encounter();if(!e.combatants.length)return;if(e.turnIndex>=0){const c=e.combatants[e.turnIndex];c.actionsUsed=0;c.reactionUsed=false}e.turnIndex++;if(e.turnIndex>=e.combatants.length){e.turnIndex=0;e.round++}render()};
+$("prevTurnBtn").onclick=()=>{const e=encounter();if(!e.combatants.length)return;e.turnIndex--;if(e.turnIndex<0){e.turnIndex=e.combatants.length-1;e.round=Math.max(1,e.round-1)}render()};
+$("quickRollBtn").onclick=()=>{try{$("quickRollOutput").textContent=roll($("quickDice").value)}catch(e){$("quickRollOutput").textContent=e.message}};
+$("quickDice").onkeydown=e=>{if(e.key==="Enter")$("quickRollBtn").click()};
+function renderNotes(){const e=encounter();$("encounterNotes").value=e.notes;$("lootList").innerHTML=e.loot.map((x,i)=>`<div class="loot-row"><label>Item<input data-loot-name="${i}" value="${esc(x.name)}"></label><label>Quantity<input type="number" data-loot-qty="${i}" value="${x.quantity}"></label><label>Notes<input data-loot-notes="${i}" value="${esc(x.notes)}"></label><button data-loot-remove="${i}">Remove</button></div>`).join("")||"<p>No loot yet.</p>";document.querySelectorAll("[data-loot-remove]").forEach(b=>b.onclick=()=>{e.loot.splice(+b.dataset.lootRemove,1);render()})}
+function collectNotes(){const e=encounter();e.notes=$("encounterNotes").value;e.loot=e.loot.map((x,i)=>({...x,name:document.querySelector(`[data-loot-name="${i}"]`)?.value??x.name,quantity:+document.querySelector(`[data-loot-qty="${i}"]`)?.value||0,notes:document.querySelector(`[data-loot-notes="${i}"]`)?.value??x.notes}))}
+$("addLootBtn").onclick=()=>{collectNotes();encounter().loot.push({id:uid(),name:"New Loot",quantity:1,notes:""});renderNotes()};
+$("saveBtn").onclick=()=>{collect();collectNotes();encounter().name=$("encounterName").value.trim()||"Untitled Encounter";save(true);render()};
+$("exportBtn").onclick=()=>{collect();collectNotes();save();const blob=new Blob([JSON.stringify({version:2,state},null,2)],{type:"application/json"});const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=`pf2e-tracker-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(url)};
+$("importInput").onchange=async e=>{const f=e.target.files?.[0];if(!f)return;try{const x=JSON.parse(await f.text());if(!x.state?.encounters)throw Error("Invalid tracker file.");state=x.state;selectedId=null;render();toast("Import complete.")}catch(err){toast(err.message)}e.target.value=""};
+window.addEventListener("beforeunload",()=>{try{collect();collectNotes();save()}catch{}});
+render();
 })();

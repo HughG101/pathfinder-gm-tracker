@@ -1,56 +1,25 @@
-# Pathfinder 2e GM Combat Tracker
+# Pathfinder 2e GM Tracker v2
 
-A static, responsive encounter manager intended for GitHub Pages.
+This version removes the compendium and replaces it with a complete manual combatant builder.
 
-## Included in this starter build
+## Major changes
 
-- Multiple saved encounters
-- Player, creature, NPC, and hazard combatants
-- Initiative sorting, rounds, and turns
-- Current, maximum, and temporary HP
-- AC, saves, Perception, conditions, resistances, weaknesses, and immunities
-- Configurable action counts, reactions, and freeform condition tracking
-- Attacks, damage dice, attack bonuses, and MAP notes
-- Spell attack, spell DC, prepared spells, and spell slots
-- Persistent damage notes and flat recovery checks
-- Automatic dice roller
-- Encounter notes and treasure
-- Browser storage
-- JSON export/import
-- Responsive desktop, tablet, iPhone, and iPad layout
-- Searchable sample compendium
-- Homebrew compendium entries
+- No built-in compendium.
+- Manually create players, creatures, NPCs, and hazards.
+- Full fields for senses, languages, speed, ability modifiers, saves, skills, defenses, conditions, items, attacks, actions, reactions, abilities, spells, and focus points.
+- Every attack name is editable, including homebrew attack names.
+- Attacks support action cost, traits, attack modifier, damage dice, type, range, reload, ammunition, and special effects.
+- Actions support configurable action costs.
+- Includes the supplied Red Sun illusionist stat block as a removable/editable sample combatant.
+- Browser save, JSON import/export, initiative, HP, action tracking, reactions, and dice rolling remain included.
 
-## Important scope note
+## Updating GitHub Pages
 
-The project includes the application and sample data, but it does not include the complete Pathfinder rules database. Add properly licensed rules data to the `data` folder or expand the built-in sample entries in `js/app.js`.
+Upload and replace:
 
-## Running locally
+- `index.html`
+- `styles/main.css`
+- `js/app.js`
+- `README.md`
 
-Open `index.html` directly in a browser, or use a local development server.
-
-## Publishing with GitHub Pages
-
-1. Create a new GitHub repository.
-2. Upload all files and folders from this project.
-3. Open the repository settings.
-4. Select **Pages**.
-5. Choose **Deploy from a branch**.
-6. Select the `main` branch and `/root`.
-7. Save.
-
-## Saving on iPhone and iPad
-
-The tracker saves automatically in browser storage. Use **Export JSON** regularly as a backup. On iOS or iPadOS, the exported file is saved through the browser's normal Files/share workflow. Use **Import JSON** to restore it.
-
-Browser storage may be removed if website data is cleared, so JSON backups are strongly recommended.
-
-## Suggested next development steps
-
-- Replace sample compendium entries with licensed data
-- Add complete weak/elite adjustment automation
-- Add a creature-building-by-level tool
-- Add rune-driven attack and damage calculations
-- Add structured condition automation
-- Add encounter XP budgeting
-- Add optional cloud synchronization
+Keep the folder structure exactly as shown.
