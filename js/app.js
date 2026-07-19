@@ -54,6 +54,7 @@ function encounter(){let e=state.encounters.find(x=>x.id===state.currentEncounte
 function combatant(){return encounter().combatants.find(c=>c.id===selectedId)}
 function save(msg=false){localStorage.setItem(KEY,JSON.stringify(state));if(msg)toast("Saved on this device.")}
 function toast(t){$("toast").textContent=t;$("toast").classList.add("show");clearTimeout(toast.t);toast.t=setTimeout(()=>$("toast").classList.remove("show"),2200)}
+function shortDescription(text,max=150){const value=String(text??"").trim();return value.length>max?value.slice(0,max-1).trimEnd()+"…":value}
 function roll(expr){const m=String(expr).replace(/\s/g,"").match(/^(\d*)d(\d+)([+-]\d+)?$/i);if(!m)throw Error("Use a format such as 1d20+7.");const n=+m[1]||1,s=+m[2],mod=+m[3]||0;if(n<1||n>100||s<2)throw Error("Invalid dice.");const rs=Array.from({length:n},()=>Math.floor(Math.random()*s)+1);return`${expr}: [${rs.join(", ")}]${mod?` ${mod>=0?"+":"-"} ${Math.abs(mod)}`:""} = ${rs.reduce((a,b)=>a+b,0)+mod}`}
 function render(){renderSelect();renderEncounter();renderPicker();renderBuilder();renderNotes();save()}
 function renderSelect(){$("encounterSelect").innerHTML=state.encounters.map(e=>`<option value="${e.id}" ${e.id===state.currentEncounterId?"selected":""}>${esc(e.name)}</option>`).join("")}
@@ -63,11 +64,22 @@ function renderEncounter(){
  const hpPct=c.maxHp?Math.max(0,Math.min(100,c.hp/c.maxHp*100)):0;
  const dots=Array.from({length:c.maxActions},(_,j)=>`<button class="action-dot ${j<c.actionsUsed?"used":""}" data-action="${c.id}" data-i="${j}" type="button">${j+1}</button>`).join("");
  const attacks=c.attacks.map((a,j)=>`<button type="button" data-atk="${c.id}" data-ai="${j}">${esc(a.name)} +${a.attack}</button><button type="button" data-dmg="${c.id}" data-ai="${j}">${esc(a.damage)}</button>`).join("");
+ const actionList=(c.actions||[]).map(a=>`<div class="ability-summary"><strong>${esc(a.name)}</strong><span class="badge">${Number(a.cost)||0} action${Number(a.cost)===1?"":"s"}</span><p>${esc(shortDescription(a.effect||a.trigger||"No description."))}</p></div>`).join("");
+ const reactionList=(c.reactions||[]).map(r=>`<div class="ability-summary"><strong>${esc(r.name)}</strong><span class="badge">Reaction</span><p>${esc(shortDescription(r.effect||r.trigger||"No description."))}</p></div>`).join("");
+ const specialList=(c.specialAbilities||[]).map(a=>`<div class="ability-summary"><strong>${esc(a.name)}</strong>${a.category?`<span class="badge">${esc(a.category)}</span>`:""}<p>${esc(shortDescription(a.effect||a.trigger||"No description."))}</p></div>`).join("");
  return`<article class="combatant-card ${i===e.turnIndex?"active-turn":""}">
  <div class="combatant-top"><div><div class="combatant-name">${esc(c.name)}</div><span class="badge">${esc(c.type)} · Level ${c.level}</span></div><strong>Init ${c.initiative}</strong><strong>AC ${c.ac}</strong><button data-edit="${c.id}" type="button">Edit</button></div>
  <div class="hp-bar"><div class="hp-fill" style="width:${hpPct}%"></div></div>
  <div class="combatant-controls"><label>Amount<input data-amount="${c.id}" type="number" value="1" min="0"></label><button data-hurt="${c.id}">Damage</button><button data-heal="${c.id}">Heal</button><button data-temp="${c.id}">Temp HP</button><strong>HP ${c.hp}/${c.maxHp}${c.tempHp?` +${c.tempHp} temp`:""}</strong><button data-save="${c.id}" data-kind="fort">Fort +${c.fort}</button><button data-save="${c.id}" data-kind="ref">Ref +${c.ref}</button><button data-save="${c.id}" data-kind="will">Will +${c.will}</button><button data-per="${c.id}">Perception +${c.perception}</button><button data-react="${c.id}">${c.reactionUsed?"Reaction Used":"Reaction Ready"}</button></div>
- <div class="detail-line">${esc(c.senses)}${c.languages?` · Languages: ${esc(c.languages)}`:""}</div><div class="action-track">${dots}</div><div class="attack-buttons">${attacks}</div></article>`}).join(""):`<div class="card">No combatants yet.</div>`;
+ <div class="detail-line">${esc(c.senses)}${c.languages?` · Languages: ${esc(c.languages)}`:""}</div>
+ <div class="action-track">${dots}</div>
+ <div class="attack-buttons">${attacks}</div>
+ ${(actionList||reactionList||specialList)?`<div class="encounter-ability-grid">
+   ${actionList?`<section><h4>Actions</h4>${actionList}</section>`:""}
+   ${reactionList?`<section><h4>Reactions</h4>${reactionList}</section>`:""}
+   ${specialList?`<section><h4>Abilities</h4>${specialList}</section>`:""}
+ </div>`:""}
+ </article>`}).join(""):`<div class="card">No combatants yet.</div>`;
  bindCards()
 }
 function bindCards(){
