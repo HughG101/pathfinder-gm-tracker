@@ -10,7 +10,7 @@ function defaultCombatant(name="New Combatant"){
  maxActions:3,actionsUsed:0,reactionUsed:false,focusPoints:0,senses:"",languages:"",fort:0,ref:0,will:0,
  resistances:"",weaknesses:"",immunities:"",conditions:"",persistent:"",
  abilities:{str:0,dex:0,con:0,int:0,wis:0,cha:0},skills:[],items:[],attacks:[],actions:[],reactions:[],specialAbilities:[],
- spellAttack:0,spellDc:10,spells:[],structuredConditions:[],notes:""};
+ spellAttack:0,spellDc:10,spellSlots:[],spells:[],structuredConditions:[],notes:""};
 }
 function redSunSample(){
  const c=defaultCombatant("Red Sun Illusionist");
@@ -34,6 +34,7 @@ function redSunSample(){
  {id:uid(),name:"Illusory Instinct",category:"Interaction",effect:"+2 to Initiative and Stealth while illusion spells are active."},
  {id:uid(),name:"Surprise Attack",category:"Interaction",effect:"Enemies are off-guard in the first round if they have not acted."}
  ];
+ c.spellSlots=[{id:uid(),rank:"1",maximum:2,used:0},{id:uid(),rank:"2",maximum:2,used:0},{id:uid(),rank:"Focus",maximum:1,used:0}];
  c.spells=[
  {id:uid(),name:"Mirror Image",rank:"2",type:"Innate Arcane",actionCost:"2",effect:""},
  {id:uid(),name:"Invisibility",rank:"2",type:"Innate Arcane",actionCost:"2",effect:""},
@@ -127,6 +128,7 @@ function normalizeState(){
       if(!Array.isArray(c.reactions))c.reactions=[];
       if(!Array.isArray(c.specialAbilities))c.specialAbilities=[];
       if(!Array.isArray(c.spells))c.spells=[];
+      if(!Array.isArray(c.spellSlots))c.spellSlots=[];
     }
   }
 }
@@ -147,6 +149,11 @@ function renderEncounter(){
  const actionList=(c.actions||[]).map(a=>`<div class="ability-summary"><strong>${esc(a.name)}</strong><span class="badge">${Number(a.cost)||0} action${Number(a.cost)===1?"":"s"}</span><p>${esc(shortDescription(a.effect||a.trigger||"No description."))}</p></div>`).join("");
  const reactionList=(c.reactions||[]).map(r=>`<div class="ability-summary"><strong>${esc(r.name)}</strong><span class="badge">Reaction</span><p>${esc(shortDescription(r.effect||r.trigger||"No description."))}</p></div>`).join("");
  const specialList=(c.specialAbilities||[]).map(a=>`<div class="ability-summary"><strong>${esc(a.name)}</strong>${a.category?`<span class="badge">${esc(a.category)}</span>`:""}<p>${esc(shortDescription(a.effect||a.trigger||"No description."))}</p></div>`).join("");
+ const spellSlotList=(c.spellSlots||[]).map((slot,slotIndex)=>{
+   const maximum=Math.max(0,Number(slot.maximum)||0),used=Math.max(0,Math.min(maximum,Number(slot.used)||0)),remaining=maximum-used;
+   const dots=Array.from({length:maximum},(_,dotIndex)=>`<button type="button" class="slot-dot ${dotIndex<used?"used":""}" data-slot-toggle="${c.id}" data-slot-index="${slotIndex}" data-slot-dot="${dotIndex}">${dotIndex<used?"×":"○"}</button>`).join("");
+   return`<div class="spell-slot-summary"><div><strong>${esc(String(slot.rank).toLowerCase()==="focus"?"Focus Points":`Rank ${slot.rank}`)}</strong><span>${remaining}/${maximum} remaining</span></div><div class="slot-dot-track">${dots}</div><div class="slot-actions"><button type="button" data-slot-use="${c.id}" data-slot-index="${slotIndex}">Use</button><button type="button" data-slot-restore="${c.id}" data-slot-index="${slotIndex}">Restore</button></div></div>`;
+ }).join("");
  const spellList=(c.spells||[]).map(s=>`<div class="ability-summary spell-summary">
    <strong>${esc(s.name)}</strong>
    ${s.rank?`<span class="badge">${esc(s.rank)}</span>`:""}
@@ -161,10 +168,11 @@ function renderEncounter(){
  <div class="detail-line">${esc(c.senses)}${c.languages?` · Languages: ${esc(c.languages)}`:""}</div>
  <div class="action-track">${dots}</div>
  <div class="attack-buttons">${attacks}</div>
- ${(actionList||reactionList||specialList||spellList)?`<div class="encounter-ability-grid">
+ ${(actionList||reactionList||specialList||spellSlotList||spellList)?`<div class="encounter-ability-grid">
    ${actionList?`<section><h4>Actions</h4>${actionList}</section>`:""}
    ${reactionList?`<section><h4>Reactions</h4>${reactionList}</section>`:""}
    ${specialList?`<section><h4>Abilities</h4>${specialList}</section>`:""}
+   ${spellSlotList?`<section><h4>Spell Slots</h4>${spellSlotList}</section>`:""}
    ${spellList?`<section><h4>Spells</h4>${spellList}</section>`:""}
  </div>`:""}
  </article>`}).join(""):`<div class="card">No combatants yet.</div>`;
@@ -180,7 +188,7 @@ function bindCards(){
    copy.name=`${original.name} Copy`;
    copy.actionsUsed=0;
    copy.reactionUsed=false;
-   for(const collection of ["skills","items","attacks","actions","reactions","specialAbilities","spells"]){
+   for(const collection of ["skills","items","attacks","actions","reactions","specialAbilities","spellSlots","spells"]){
      if(Array.isArray(copy[collection]))copy[collection].forEach(entry=>entry.id=uid());
    }
    encounter().combatants.push(copy);
@@ -197,6 +205,9 @@ function bindCards(){
  document.querySelectorAll("[data-per]").forEach(b=>b.onclick=()=>toast(roll(`1d20+${find(b.dataset.per).perception}`)));
  document.querySelectorAll("[data-atk]").forEach(b=>b.onclick=()=>{const a=find(b.dataset.atk).attacks[+b.dataset.ai];toast(`${a.name}: ${roll(`1d20+${a.attack}`)}`)});
  document.querySelectorAll("[data-dmg]").forEach(b=>b.onclick=()=>{const a=find(b.dataset.dmg).attacks[+b.dataset.ai];try{toast(`${a.name}: ${roll(a.damage)}`)}catch(e){toast(e.message)}})
+ document.querySelectorAll("[data-slot-use]").forEach(b=>b.onclick=()=>{const s=find(b.dataset.slotUse)?.spellSlots?.[+b.dataset.slotIndex];if(s){s.used=Math.min(+s.maximum||0,(+s.used||0)+1);render()}});
+ document.querySelectorAll("[data-slot-restore]").forEach(b=>b.onclick=()=>{const s=find(b.dataset.slotRestore)?.spellSlots?.[+b.dataset.slotIndex];if(s){s.used=Math.max(0,(+s.used||0)-1);render()}});
+ document.querySelectorAll("[data-slot-toggle]").forEach(b=>b.onclick=()=>{const s=find(b.dataset.slotToggle)?.spellSlots?.[+b.dataset.slotIndex];if(s){const d=+b.dataset.slotDot;s.used=d<(+s.used||0)?d:d+1;render()}});
 }
 const find=id=>encounter().combatants.find(c=>c.id===id);
 const amount=id=>Math.max(0,+document.querySelector(`[data-amount="${id}"]`)?.value||0);
@@ -204,7 +215,7 @@ function renderPicker(){const e=encounter();if(!selectedId&&e.combatants[0])sele
 const scalarMap={cName:"name",cType:"type",cLevel:"level",cInitiative:"initiative",cMaxHp:"maxHp",cHp:"hp",cTempHp:"tempHp",cAc:"ac",cSpeed:"speed",cPerception:"perception",cMaxActions:"maxActions",cFocusPoints:"focusPoints",cSenses:"senses",cLanguages:"languages",cFort:"fort",cRef:"ref",cWill:"will",cResistances:"resistances",cWeaknesses:"weaknesses",cImmunities:"immunities",cConditions:"conditions",cPersistent:"persistent",cSpellAttack:"spellAttack",cSpellDc:"spellDc",cNotes:"notes"};
 const nums=new Set(["level","initiative","maxHp","hp","tempHp","ac","perception","maxActions","focusPoints","fort","ref","will","spellAttack","spellDc"]);
 function renderBuilder(){const c=combatant();if(!c)return;Object.entries(scalarMap).forEach(([id,k])=>$(id).value=c[k]??"");["str","dex","con","int","wis","cha"].forEach(k=>$("c"+k[0].toUpperCase()+k.slice(1)).value=c.abilities[k]??0);
- renderSkills(c);renderItems(c);renderAttacks(c);renderGeneric("actionsEditor",c.actions,"action");renderGeneric("reactionsEditor",c.reactions,"reaction");renderGeneric("abilitiesEditor",c.specialAbilities,"ability");renderSpells(c)}
+ renderSkills(c);renderItems(c);renderAttacks(c);renderGeneric("actionsEditor",c.actions,"action");renderGeneric("reactionsEditor",c.reactions,"reaction");renderGeneric("abilitiesEditor",c.specialAbilities,"ability");renderSpellSlots(c);renderSpells(c)}
 function removeButton(type,i){return`<button type="button" data-remove="${type}" data-index="${i}">Remove</button>`}
 function bindRemoves(c){document.querySelectorAll("[data-remove]").forEach(b=>b.onclick=()=>{const key={skill:"skills",item:"items",attack:"attacks",action:"actions",reaction:"reactions",ability:"specialAbilities",spell:"spells"}[b.dataset.remove];c[key].splice(+b.dataset.index,1);renderBuilder()})}
 function renderSkills(c){$("skillsEditor").innerHTML=c.skills.map((s,i)=>`<div class="editor-row wide"><label>Name<input data-skill-name="${i}" value="${esc(s.name)}"></label><label>Modifier<input type="number" data-skill-mod="${i}" value="${s.modifier}"></label>${removeButton("skill",i)}</div>`).join("");bindRemoves(c)}
@@ -214,6 +225,7 @@ function renderAttacks(c){$("attacksEditor").innerHTML=c.attacks.map((a,i)=>`<di
 <label>Damage dice<input data-at-damage="${i}" value="${esc(a.damage)}"></label><label>Damage type<input data-at-type="${i}" value="${esc(a.damageType)}"></label><label>Range<input data-at-range="${i}" value="${esc(a.range)}"></label><label>Reload<input data-at-reload="${i}" value="${esc(a.reload)}"></label>
 <label>Ammunition<input data-at-ammo="${i}" value="${esc(a.ammo)}"></label><label class="full">Special effects<input data-at-special="${i}" value="${esc(a.special)}"></label>${removeButton("attack",i)}</div>`).join("");bindRemoves(c)}
 function renderGeneric(id,list,type){$(id).innerHTML=list.map((x,i)=>`<div class="editor-row"><label>Name<input data-${type}-name="${i}" value="${esc(x.name)}"></label>${type==="action"?`<label>Action cost<input type="number" min="0" data-action-cost="${i}" value="${x.cost}"></label><label>Traits<input data-action-traits="${i}" value="${esc(x.traits)}"></label>`:""}${type==="ability"?`<label>Category<input data-ability-category="${i}" value="${esc(x.category)}"></label>`:""}<label>Trigger / usage<input data-${type}-trigger="${i}" value="${esc(x.trigger||"")}"></label><label class="full">Effect<input data-${type}-effect="${i}" value="${esc(x.effect)}"></label>${removeButton(type,i)}</div>`).join("");bindRemoves(combatant())}
+function renderSpellSlots(c){$("spellSlotsEditor").innerHTML=(c.spellSlots||[]).map((s,i)=>`<div class="editor-row wide"><label>Rank<input data-slot-rank="${i}" value="${esc(s.rank)}"></label><label>Maximum<input type="number" min="0" data-slot-max="${i}" value="${+s.maximum||0}"></label><label>Used<input type="number" min="0" data-slot-used="${i}" value="${+s.used||0}"></label><button type="button" data-remove-slot="${i}">Remove</button></div>`).join("")||"<p class='muted'>No spell slots configured.</p>";document.querySelectorAll("[data-remove-slot]").forEach(b=>b.onclick=()=>{c.spellSlots.splice(+b.dataset.removeSlot,1);renderSpellSlots(c)})}
 function renderSpells(c){$("spellsEditor").innerHTML=c.spells.map((s,i)=>`<div class="editor-row"><label>Name<input data-sp-name="${i}" value="${esc(s.name)}"></label><label>Rank<input data-sp-rank="${i}" value="${esc(s.rank)}"></label><label>Type<input data-sp-type="${i}" value="${esc(s.type)}"></label><label>Action cost<input data-sp-cost="${i}" value="${esc(s.actionCost)}"></label><label class="full">Effect<input data-sp-effect="${i}" value="${esc(s.effect)}"></label>${removeButton("spell",i)}</div>`).join("");bindRemoves(c)}
 function collect(){
  const c=combatant();if(!c)return;Object.entries(scalarMap).forEach(([id,k])=>c[k]=nums.has(k)?+$ (id).value||0:$(id).value.trim());["str","dex","con","int","wis","cha"].forEach(k=>c.abilities[k]=+$("c"+k[0].toUpperCase()+k.slice(1)).value||0);
@@ -223,6 +235,7 @@ function collect(){
  c.actions=c.actions.map((x,i)=>({...x,name:val("action-name",i,x.name),cost:+val("action-cost",i,x.cost)||0,traits:val("action-traits",i,x.traits),trigger:val("action-trigger",i,x.trigger),effect:val("action-effect",i,x.effect)}));
  c.reactions=c.reactions.map((x,i)=>({...x,name:val("reaction-name",i,x.name),trigger:val("reaction-trigger",i,x.trigger),effect:val("reaction-effect",i,x.effect)}));
  c.specialAbilities=c.specialAbilities.map((x,i)=>({...x,name:val("ability-name",i,x.name),category:val("ability-category",i,x.category),trigger:val("ability-trigger",i,x.trigger),effect:val("ability-effect",i,x.effect)}));
+ c.spellSlots=(c.spellSlots||[]).map((s,i)=>({...s,rank:val("slot-rank",i,s.rank),maximum:Math.max(0,+val("slot-max",i,s.maximum)||0),used:Math.max(0,Math.min(+val("slot-max",i,s.maximum)||0,+val("slot-used",i,s.used)||0))}));
  c.spells=c.spells.map((x,i)=>({...x,name:val("sp-name",i,x.name),rank:val("sp-rank",i,x.rank),type:val("sp-type",i,x.type),actionCost:val("sp-cost",i,x.actionCost),effect:val("sp-effect",i,x.effect)}))
 }
 function val(key,i,fallback=""){return document.querySelector(`[data-${key}="${i}"]`)?.value??fallback}
@@ -238,6 +251,7 @@ $("addAttackBtn").onclick=()=>{collect();combatant().attacks.push({id:uid(),name
 $("addActionBtn").onclick=()=>{collect();combatant().actions.push({id:uid(),name:"New Action",cost:1,traits:"",trigger:"",effect:""});renderBuilder()};
 $("addReactionBtn").onclick=()=>{collect();combatant().reactions.push({id:uid(),name:"New Reaction",trigger:"",effect:""});renderBuilder()};
 $("addAbilityBtn").onclick=()=>{collect();combatant().specialAbilities.push({id:uid(),name:"New Ability",category:"Automatic",trigger:"",effect:""});renderBuilder()};
+$("addSpellSlotBtn").onclick=()=>{collect();const c=combatant();if(c){c.spellSlots.push({id:uid(),rank:String(c.spellSlots.length+1),maximum:1,used:0});renderBuilder()}};
 $("addSpellBtn").onclick=()=>{collect();combatant().spells.push({id:uid(),name:"New Spell",rank:"1",type:"Prepared",actionCost:"2",effect:""});renderBuilder()};
 $("newEncounterBtn").onclick=()=>{const e=defaultEncounter(`Encounter ${state.encounters.length+1}`);state.encounters.push(e);state.currentEncounterId=e.id;selectedId=null;render()};
 $("encounterSelect").onchange=e=>{state.currentEncounterId=e.target.value;selectedId=null;render()};
@@ -501,15 +515,39 @@ function parseStatBlock(text){
  c.actions=[...entries("Offensive Abilities",["Spells","Reactions","Automatic Abilities"],"Offensive"),...entries("Actions",["Reactions","Spells"],"Action")].map(x=>({id:x.id,name:x.name,cost:x.cost||1,traits:x.traits,trigger:x.trigger,effect:x.effect}));
  c.reactions=entries("Reactions",["Speed","Melee","Ranged","Spells"],"Reaction").map(x=>({id:x.id,name:x.name,trigger:x.trigger,effect:x.effect}));
  c.specialAbilities=[...entries("Interaction Abilities",["Items","AC","Saves","HP"],"Interaction"),...entries("Automatic Abilities",["Reactions","Speed","Melee","Ranged"],"Automatic")].map(x=>({id:x.id,name:x.name,category:x.category,trigger:x.trigger,effect:x.effect}));
+ c.spellSlots=[];
+ for(const m of raw.matchAll(/(?:Rank|Level)?\s*(\d+)(?:st|nd|rd|th)?\s*(?:slots?)?\s*[:—-]\s*(\d+)\s*(?:slots?)?/gi)){if(!c.spellSlots.some(s=>String(s.rank)===m[1]))c.spellSlots.push({id:uid(),rank:m[1],maximum:+m[2],used:0})}
+ const fp=raw.match(/Focus Spells?\s*\((\d+)\s*FP\)/i);if(fp)c.spellSlots.push({id:uid(),rank:"Focus",maximum:+fp[1],used:0});
  c.spells=[];for(const m of raw.matchAll(/^(?:•|-)?\s*(?:(\d+)(?:st|nd|rd|th)?|Cantrips?|Focus Spells?(?:\s*\((\d+)\s*FP\))?)\s*:\s*(.+)$/gim)){const rank=m[1]?m[1]:(/cantrip/i.test(m[0])?"Cantrip":m[2]?`Focus ${m[2]}`:"");for(const name of m[3].split(",").map(x=>x.trim()).filter(Boolean))c.spells.push({id:uid(),name,rank,type:/focus/i.test(m[0])?"Focus":"Spell",actionCost:"",effect:""})}
  c.notes=`Imported from pasted stat block. Review all fields for accuracy.\n\nOriginal text:\n${raw}`;return c;
 }
-let parsedStatBlock=null;
-function statPreview(c){const rows=[["Name",c.name],["Type",c.type],["Level",c.level],["HP",`${c.hp}/${c.maxHp}`],["AC",c.ac],["Perception",`+${c.perception}`],["Saves",`Fort +${c.fort}, Ref +${c.ref}, Will +${c.will}`],["Languages",c.languages||"—"],["Senses",c.senses||"—"],["Skills",c.skills.map(s=>`${s.name} ${s.modifier>=0?"+":""}${s.modifier}`).join(", ")||"—"],["Attacks",c.attacks.map(a=>`${a.name} +${a.attack} (${a.damage})`).join(", ")||"—"],["Actions",c.actions.map(a=>a.name).join(", ")||"—"],["Reactions",c.reactions.map(a=>a.name).join(", ")||"—"],["Abilities",c.specialAbilities.map(a=>a.name).join(", ")||"—"],["Spells",c.spells.map(a=>a.name).join(", ")||"—"]];return rows.map(([l,v])=>`<div class="preview-row"><strong>${esc(l)}</strong><span>${esc(v)}</span></div>`).join("")}
-$("previewStatBlockBtn").onclick=()=>{try{parsedStatBlock=parseStatBlock($("statBlockInput").value);$("statBlockPreview").innerHTML=statPreview(parsedStatBlock)}catch(e){parsedStatBlock=null;$("statBlockPreview").textContent=e.message}};
-$("importStatBlockBtn").onclick=()=>{try{const c=parsedStatBlock||parseStatBlock($("statBlockInput").value);c.id=uid();encounter().combatants.push(c);selectedId=c.id;render();tab("builder");toast(`${c.name} imported. Review it before play.`)}catch(e){toast(e.message)}};
-$("clearStatBlockBtn").onclick=()=>{$("statBlockInput").value="";$("statBlockPreview").textContent="Paste a stat block and select Preview Import.";parsedStatBlock=null};
 
+let parsedStatBlock=null;
+let previewSectionOrder=["identity","defenses","movement","abilities","skills","items","attacks","actions","reactions","specialAbilities","spellSlots","spells","notes"];
+const previewSectionLabels={identity:"Identity",defenses:"Defenses",movement:"Movement and Senses",abilities:"Ability Scores",skills:"Skills",items:"Items",attacks:"Attacks",actions:"Actions",reactions:"Reactions",specialAbilities:"Abilities",spellSlots:"Spell Slots",spells:"Spells",notes:"Notes"};
+function movePreviewSection(section,direction){const i=previewSectionOrder.indexOf(section),t=i+direction;if(i<0||t<0||t>=previewSectionOrder.length)return;[previewSectionOrder[i],previewSectionOrder[t]]=[previewSectionOrder[t],previewSectionOrder[i]];renderEditableStatPreview()}
+function removePreviewSection(section){if(!parsedStatBlock)return;const c=parsedStatBlock;if(["skills","items","attacks","actions","reactions","specialAbilities","spellSlots","spells"].includes(section))c[section]=[];else if(section==="notes")c.notes="";else if(section==="movement"){c.speed="";c.senses="";c.languages=""}else if(section==="abilities")c.abilities={str:0,dex:0,con:0,int:0,wis:0,cha:0};else if(section==="defenses"){Object.assign(c,{ac:10,maxHp:0,hp:0,tempHp:0,fort:0,ref:0,will:0,perception:0,resistances:"",weaknesses:"",immunities:""})}renderEditableStatPreview()}
+function previewSectionShell(section,body){return`<section class="preview-edit-section"><div class="preview-edit-header"><h3>${esc(previewSectionLabels[section])}</h3><div class="preview-section-actions"><button type="button" data-preview-up="${section}">Up</button><button type="button" data-preview-down="${section}">Down</button><button type="button" data-preview-remove="${section}" class="danger">Remove</button></div></div><div class="preview-edit-body">${body}</div></section>`}
+function previewInput(label,key,value,type="text"){return`<label>${esc(label)}<input type="${type}" data-preview-key="${key}" value="${esc(value)}"></label>`}
+function previewAbilityList(key,list){return`<div class="preview-list-editor">${(list||[]).map((x,i)=>`<div class="preview-list-row wide">${previewInput("Name",`${key}.${i}.name`,x.name)}${key==="actions"?previewInput("Action cost",`${key}.${i}.cost`,x.cost,"number")+previewInput("Traits",`${key}.${i}.traits`,x.traits||""):""}${key==="specialAbilities"?previewInput("Category",`${key}.${i}.category`,x.category||""):""}${previewInput("Trigger / usage",`${key}.${i}.trigger`,x.trigger||"")}<label class="preview-full">Effect<textarea data-preview-key="${key}.${i}.effect" rows="3">${esc(x.effect||"")}</textarea></label><button type="button" data-preview-delete-item="${key}" data-preview-index="${i}" class="danger">Delete</button></div>`).join("")||"<p class='muted'>No entries recognized.</p>"}<button type="button" data-preview-add-item="${key}">Add ${esc(previewSectionLabels[key]||"Entry")}</button></div>`}
+function renderEditableStatPreview(){if(!parsedStatBlock){$("statBlockPreview").textContent="Paste a stat block and select Preview Import.";return}const c=parsedStatBlock;const sections={
+identity:previewSectionShell("identity",`<div class="preview-form-grid">${previewInput("Name","name",c.name)}<label>Type<select data-preview-key="type">${["Player","Creature","NPC","Hazard"].map(t=>`<option ${c.type===t?"selected":""}>${t}</option>`).join("")}</select></label>${previewInput("Level","level",c.level,"number")}${previewInput("Initiative","initiative",c.initiative,"number")}</div>`),
+defenses:previewSectionShell("defenses",`<div class="preview-form-grid">${previewInput("Maximum HP","maxHp",c.maxHp,"number")}${previewInput("Current HP","hp",c.hp,"number")}${previewInput("Temporary HP","tempHp",c.tempHp,"number")}${previewInput("Armor Class","ac",c.ac,"number")}${previewInput("Fortitude","fort",c.fort,"number")}${previewInput("Reflex","ref",c.ref,"number")}${previewInput("Will","will",c.will,"number")}${previewInput("Perception","perception",c.perception,"number")}${previewInput("Resistances","resistances",c.resistances)}${previewInput("Weaknesses","weaknesses",c.weaknesses)}${previewInput("Immunities","immunities",c.immunities)}</div>`),
+movement:previewSectionShell("movement",`<div class="preview-form-grid">${previewInput("Speed","speed",c.speed)}${previewInput("Senses","senses",c.senses)}${previewInput("Languages","languages",c.languages)}</div>`),
+abilities:previewSectionShell("abilities",`<div class="preview-form-grid six">${["str","dex","con","int","wis","cha"].map(k=>previewInput(k.toUpperCase(),`abilities.${k}`,c.abilities[k],"number")).join("")}</div>`),
+skills:previewSectionShell("skills",`<div class="preview-list-editor">${(c.skills||[]).map((s,i)=>`<div class="preview-list-row">${previewInput("Name",`skills.${i}.name`,s.name)}${previewInput("Modifier",`skills.${i}.modifier`,s.modifier,"number")}<button type="button" data-preview-delete-item="skills" data-preview-index="${i}" class="danger">Delete</button></div>`).join("")||"<p class='muted'>No skills recognized.</p>"}<button type="button" data-preview-add-item="skills">Add Skill</button></div>`),
+items:previewSectionShell("items",`<div class="preview-list-editor">${(c.items||[]).map((x,i)=>`<div class="preview-list-row">${previewInput("Name",`items.${i}.name`,x.name)}${previewInput("Quantity",`items.${i}.quantity`,x.quantity,"number")}${previewInput("Notes",`items.${i}.notes`,x.notes)}<button type="button" data-preview-delete-item="items" data-preview-index="${i}" class="danger">Delete</button></div>`).join("")||"<p class='muted'>No items recognized.</p>"}<button type="button" data-preview-add-item="items">Add Item</button></div>`),
+attacks:previewSectionShell("attacks",`<div class="preview-list-editor">${(c.attacks||[]).map((a,i)=>`<div class="preview-list-row wide">${previewInput("Name",`attacks.${i}.name`,a.name)}${previewInput("Action cost",`attacks.${i}.actionCost`,a.actionCost,"number")}${previewInput("Attack",`attacks.${i}.attack`,a.attack,"number")}${previewInput("Traits",`attacks.${i}.traits`,a.traits)}${previewInput("Damage",`attacks.${i}.damage`,a.damage)}${previewInput("Damage type",`attacks.${i}.damageType`,a.damageType)}${previewInput("Range",`attacks.${i}.range`,a.range)}${previewInput("Reload",`attacks.${i}.reload`,a.reload)}${previewInput("Ammunition",`attacks.${i}.ammo`,a.ammo)}<label class="preview-full">Special effects<textarea data-preview-key="attacks.${i}.special" rows="3">${esc(a.special)}</textarea></label><button type="button" data-preview-delete-item="attacks" data-preview-index="${i}" class="danger">Delete</button></div>`).join("")||"<p class='muted'>No attacks recognized.</p>"}<button type="button" data-preview-add-item="attacks">Add Attack</button></div>`),
+actions:previewSectionShell("actions",previewAbilityList("actions",c.actions)),reactions:previewSectionShell("reactions",previewAbilityList("reactions",c.reactions)),specialAbilities:previewSectionShell("specialAbilities",previewAbilityList("specialAbilities",c.specialAbilities)),
+spellSlots:previewSectionShell("spellSlots",`<div class="preview-list-editor">${(c.spellSlots||[]).map((s,i)=>`<div class="preview-list-row">${previewInput("Rank",`spellSlots.${i}.rank`,s.rank)}${previewInput("Maximum",`spellSlots.${i}.maximum`,s.maximum,"number")}${previewInput("Used",`spellSlots.${i}.used`,s.used,"number")}<button type="button" data-preview-delete-item="spellSlots" data-preview-index="${i}" class="danger">Delete</button></div>`).join("")||"<p class='muted'>No spell slots recognized.</p>"}<button type="button" data-preview-add-item="spellSlots">Add Spell Rank</button></div>`),
+spells:previewSectionShell("spells",`<div class="preview-list-editor">${(c.spells||[]).map((s,i)=>`<div class="preview-list-row wide">${previewInput("Name",`spells.${i}.name`,s.name)}${previewInput("Rank",`spells.${i}.rank`,s.rank)}${previewInput("Type",`spells.${i}.type`,s.type)}${previewInput("Action cost",`spells.${i}.actionCost`,s.actionCost)}<label class="preview-full">Description<textarea data-preview-key="spells.${i}.effect" rows="3">${esc(s.effect)}</textarea></label><button type="button" data-preview-delete-item="spells" data-preview-index="${i}" class="danger">Delete</button></div>`).join("")||"<p class='muted'>No spells recognized.</p>"}<button type="button" data-preview-add-item="spells">Add Spell</button></div>`),
+notes:previewSectionShell("notes",`<label>Notes<textarea data-preview-key="notes" rows="8">${esc(c.notes)}</textarea></label>`)};$("statBlockPreview").innerHTML=previewSectionOrder.map(s=>sections[s]).join("");bindEditablePreview()}
+function setPreviewValue(path,value,type){const p=path.split(".");let t=parsedStatBlock;for(let i=0;i<p.length-1;i++)t=t[p[i]];t[p[p.length-1]]=type==="number"?Number(value)||0:value}
+function bindEditablePreview(){document.querySelectorAll("[data-preview-key]").forEach(i=>{i.oninput=()=>setPreviewValue(i.dataset.previewKey,i.value,i.type);i.onchange=()=>setPreviewValue(i.dataset.previewKey,i.value,i.type)});document.querySelectorAll("[data-preview-up]").forEach(b=>b.onclick=()=>movePreviewSection(b.dataset.previewUp,-1));document.querySelectorAll("[data-preview-down]").forEach(b=>b.onclick=()=>movePreviewSection(b.dataset.previewDown,1));document.querySelectorAll("[data-preview-remove]").forEach(b=>b.onclick=()=>removePreviewSection(b.dataset.previewRemove));document.querySelectorAll("[data-preview-delete-item]").forEach(b=>b.onclick=()=>{parsedStatBlock[b.dataset.previewDeleteItem].splice(Number(b.dataset.previewIndex),1);renderEditableStatPreview()});document.querySelectorAll("[data-preview-add-item]").forEach(b=>b.onclick=()=>{const k=b.dataset.previewAddItem,f={skills:{id:uid(),name:"New Skill",modifier:0},items:{id:uid(),name:"New Item",quantity:1,notes:""},attacks:{id:uid(),name:"New Attack",actionCost:1,attack:0,traits:"",damage:"1d6",damageType:"",range:"melee",reload:"",ammo:"",special:""},actions:{id:uid(),name:"New Action",cost:1,traits:"",trigger:"",effect:""},reactions:{id:uid(),name:"New Reaction",trigger:"",effect:""},specialAbilities:{id:uid(),name:"New Ability",category:"Automatic",trigger:"",effect:""},spellSlots:{id:uid(),rank:"1",maximum:1,used:0},spells:{id:uid(),name:"New Spell",rank:"1",type:"Spell",actionCost:"2",effect:""}}[k];parsedStatBlock[k].push(f);renderEditableStatPreview()})}
+$("previewStatBlockBtn").onclick=()=>{try{parsedStatBlock=parseStatBlock($("statBlockInput").value);renderEditableStatPreview()}catch(e){parsedStatBlock=null;$("statBlockPreview").textContent=e.message}};
+$("importStatBlockBtn").onclick=()=>{try{const c=parsedStatBlock||parseStatBlock($("statBlockInput").value);c.id=uid();encounter().combatants.push(structuredClone(c));selectedId=c.id;render();tab("builder");toast(`${c.name} imported. Review it before play.`)}catch(e){toast(e.message)}};
+$("clearStatBlockBtn").onclick=()=>{$("statBlockInput").value="";$("statBlockPreview").textContent="Paste a stat block and select Preview Import.";parsedStatBlock=null};
+$("resetPreviewOrderBtn").onclick=()=>{previewSectionOrder=["identity","defenses","movement","abilities","skills","items","attacks","actions","reactions","specialAbilities","spellSlots","spells","notes"];renderEditableStatPreview()};
 window.addEventListener("beforeunload",()=>{try{collect();collectNotes();save();saveSimpleInitiative()}catch{}});
 normalizeState();render();previewCreature();$("calculateRunesBtn").click();$("calculateXpBtn").click();
 })();

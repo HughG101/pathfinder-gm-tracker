@@ -147,6 +147,12 @@
         </div>
 
         <div class="collection-section">
+          <div class="section-heading"><h3>Spell Slots</h3><button id="addSpellSlotBtn" type="button">Add Rank</button></div>
+          <p class="muted">Track maximum and used slots for each rank.</p>
+          <div id="spellSlotsEditor"></div>
+        </div>
+
+        <div class="collection-section">
           <div class="section-heading"><h3>Spells</h3><button id="addSpellBtn" type="button">Add Spell</button></div>
           <div class="form-grid compact">
             <label>Spell attack<input id="cSpellAttack" type="number"></label>
@@ -318,7 +324,11 @@
         <label>Stat block text<textarea id="statBlockInput" rows="22" placeholder="Paste the full stat block here..."></textarea></label>
         <div class="tool-buttons"><button id="previewStatBlockBtn" type="button">Preview Import</button><button id="importStatBlockBtn" class="primary" type="button">Add to Encounter</button></div>
       </section>
-      <section class="card"><h2>Recognized Data</h2><div id="statBlockPreview" class="tool-result statblock-preview" aria-live="polite">Paste a stat block and select Preview Import.</div><p class="muted">Unrecognized text is preserved in the combatant notes.</p></section>
+      <section class="card">
+        <div class="section-heading"><div><h2>Editable Preview</h2><p class="muted">Edit values, reorder sections, or remove sections before importing.</p></div><button id="resetPreviewOrderBtn" type="button">Reset Order</button></div>
+        <div id="statBlockPreview" class="statblock-preview-editor" aria-live="polite">Paste a stat block and select Preview Import.</div>
+        <p class="muted">Unrecognized text is preserved in the combatant notes.</p>
+      </section>
     </div>
   </section>
   <section id="notesTab" class="tab-panel">

@@ -42,3 +42,17 @@ Cloud synchronization requires a private WebDAV-compatible provider that allows 
 
 ## Version 6 stat block importer
 Paste a PF2e-style stat block, preview recognized fields, and add it to the current encounter. The original text is preserved in combatant notes for manual correction.
+
+
+## Version 7 editable stat-block preview
+Edit recognized values, reorder or remove sections, and add/delete attacks, actions, reactions, abilities, spells, skills, and items before importing.
+
+
+## Version 8 spell-slot tracking
+
+- Add spell-slot ranks in the Combatant Builder.
+- Set maximum and used slots.
+- Encounter cards show remaining slots by rank.
+- Use, restore, or click individual slot markers directly on the encounter page.
+- Focus points can be tracked with a rank named `Focus`.
+- The editable stat-block preview also supports spell-slot rows.
