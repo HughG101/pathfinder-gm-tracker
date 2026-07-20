@@ -84,3 +84,9 @@ main{max-width:1500px;margin:auto;padding:1rem}.tab-panel{display:none}.tab-pane
 .spell-slot-summary span{color:var(--muted);font-size:.86rem}
 .slot-dot-track,.slot-actions{display:flex;gap:.3rem;flex-wrap:wrap}
 .slot-dot{min-width:2rem;padding:.35rem .45rem}.slot-dot.used{opacity:.45;text-decoration:line-through}
+
+.wide-field{grid-column:1/-1}
+.hazard-summary{display:grid;gap:.25rem;margin-top:.6rem;padding:.6rem;border:1px solid var(--border);border-radius:.55rem;background:#121823;font-size:.84rem;line-height:1.35}
+.encounter-notes{margin-top:.55rem;border-top:1px solid var(--border);padding-top:.45rem;font-size:.8rem;color:var(--muted)}
+.encounter-notes summary{cursor:pointer;color:var(--text);font-weight:600}
+.encounter-notes div{white-space:pre-wrap;margin-top:.35rem;line-height:1.35}

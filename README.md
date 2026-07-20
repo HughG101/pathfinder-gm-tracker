@@ -56,3 +56,12 @@ Edit recognized values, reorder or remove sections, and add/delete attacks, acti
 - Use, restore, or click individual slot markers directly on the encounter page.
 - Focus points can be tracked with a rank named `Focus`.
 - The editable stat-block preview also supports spell-slot rows.
+
+
+## Version 9 hazards and encounter notes
+
+- Hazard importer support for XP, Stealth/Detection, Disable, Trigger, Effect, and Reset.
+- Editable hazard section in the stat-block preview.
+- Dedicated hazard fields in the Combatant Builder.
+- Compact hazard details on encounter cards.
+- Collapsible small-text combatant notes on the encounter page.

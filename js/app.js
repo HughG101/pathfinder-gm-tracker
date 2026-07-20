@@ -8,7 +8,7 @@ const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&
 function defaultCombatant(name="New Combatant"){
  return {id:uid(),name,type:"Creature",level:1,initiative:0,maxHp:20,hp:20,tempHp:0,ac:15,speed:"25 ft.",perception:0,
  maxActions:3,actionsUsed:0,reactionUsed:false,focusPoints:0,senses:"",languages:"",fort:0,ref:0,will:0,
- resistances:"",weaknesses:"",immunities:"",conditions:"",persistent:"",
+ resistances:"",weaknesses:"",immunities:"",conditions:"",persistent:"",hazardXp:0,hazardStealth:"",hazardDisable:"",hazardTrigger:"",hazardEffect:"",hazardReset:"",
  abilities:{str:0,dex:0,con:0,int:0,wis:0,cha:0},skills:[],items:[],attacks:[],actions:[],reactions:[],specialAbilities:[],
  spellAttack:0,spellDc:10,spellSlots:[],spells:[],structuredConditions:[],notes:""};
 }
@@ -129,6 +129,8 @@ function normalizeState(){
       if(!Array.isArray(c.specialAbilities))c.specialAbilities=[];
       if(!Array.isArray(c.spells))c.spells=[];
       if(!Array.isArray(c.spellSlots))c.spellSlots=[];
+      if(typeof c.hazardXp!=="number")c.hazardXp=0;
+      for(const key of ["hazardStealth","hazardDisable","hazardTrigger","hazardEffect","hazardReset"])if(typeof c[key]!=="string")c[key]="";
     }
   }
 }
@@ -166,6 +168,15 @@ function renderEncounter(){
  <div class="hp-bar"><div class="hp-fill" style="width:${hpPct}%"></div></div>
  <div class="combatant-controls"><label>Amount<input data-amount="${c.id}" type="number" value="1" min="0"></label><button data-hurt="${c.id}">Damage</button><button data-heal="${c.id}">Heal</button><button data-temp="${c.id}">Temp HP</button><strong>HP ${c.hp}/${c.maxHp}${c.tempHp?` +${c.tempHp} temp`:""}</strong><button data-save="${c.id}" data-kind="fort">Fort +${c.fort}</button><button data-save="${c.id}" data-kind="ref">Ref +${c.ref}</button><button data-save="${c.id}" data-kind="will">Will +${c.will}</button><button data-per="${c.id}">Perception +${c.perception}</button><button data-react="${c.id}">${c.reactionUsed?"Reaction Used":"Reaction Ready"}</button></div>
  <div class="detail-line">${esc(c.senses)}${c.languages?` · Languages: ${esc(c.languages)}`:""}</div>
+ ${c.type==="Hazard"||c.hazardStealth||c.hazardDisable||c.hazardTrigger||c.hazardEffect||c.hazardReset?`<div class="hazard-summary">
+   ${c.hazardXp?`<div><strong>XP:</strong> ${c.hazardXp}</div>`:""}
+   ${c.hazardStealth?`<div><strong>Detection:</strong> ${esc(c.hazardStealth)}</div>`:""}
+   ${c.hazardDisable?`<div><strong>Disable:</strong> ${esc(c.hazardDisable)}</div>`:""}
+   ${c.hazardTrigger?`<div><strong>Trigger:</strong> ${esc(c.hazardTrigger)}</div>`:""}
+   ${c.hazardEffect?`<div><strong>Effect:</strong> ${esc(c.hazardEffect)}</div>`:""}
+   ${c.hazardReset?`<div><strong>Reset:</strong> ${esc(c.hazardReset)}</div>`:""}
+ </div>`:""}
+ ${c.notes?`<details class="encounter-notes"><summary>Notes</summary><div>${esc(c.notes)}</div></details>`:""}
  <div class="action-track">${dots}</div>
  <div class="attack-buttons">${attacks}</div>
  ${(actionList||reactionList||specialList||spellSlotList||spellList)?`<div class="encounter-ability-grid">
@@ -212,8 +223,8 @@ function bindCards(){
 const find=id=>encounter().combatants.find(c=>c.id===id);
 const amount=id=>Math.max(0,+document.querySelector(`[data-amount="${id}"]`)?.value||0);
 function renderPicker(){const e=encounter();if(!selectedId&&e.combatants[0])selectedId=e.combatants[0].id;$("combatantPicker").innerHTML=e.combatants.map(c=>`<button data-pick="${c.id}" class="${c.id===selectedId?"selected":""}">${esc(c.name)}</button>`).join("")||"<p>No combatants.</p>";document.querySelectorAll("[data-pick]").forEach(b=>b.onclick=()=>{selectedId=b.dataset.pick;renderPicker();renderBuilder()})}
-const scalarMap={cName:"name",cType:"type",cLevel:"level",cInitiative:"initiative",cMaxHp:"maxHp",cHp:"hp",cTempHp:"tempHp",cAc:"ac",cSpeed:"speed",cPerception:"perception",cMaxActions:"maxActions",cFocusPoints:"focusPoints",cSenses:"senses",cLanguages:"languages",cFort:"fort",cRef:"ref",cWill:"will",cResistances:"resistances",cWeaknesses:"weaknesses",cImmunities:"immunities",cConditions:"conditions",cPersistent:"persistent",cSpellAttack:"spellAttack",cSpellDc:"spellDc",cNotes:"notes"};
-const nums=new Set(["level","initiative","maxHp","hp","tempHp","ac","perception","maxActions","focusPoints","fort","ref","will","spellAttack","spellDc"]);
+const scalarMap={cName:"name",cType:"type",cLevel:"level",cInitiative:"initiative",cMaxHp:"maxHp",cHp:"hp",cTempHp:"tempHp",cAc:"ac",cSpeed:"speed",cPerception:"perception",cMaxActions:"maxActions",cFocusPoints:"focusPoints",cSenses:"senses",cLanguages:"languages",cFort:"fort",cRef:"ref",cWill:"will",cResistances:"resistances",cWeaknesses:"weaknesses",cImmunities:"immunities",cConditions:"conditions",cPersistent:"persistent",cHazardXp:"hazardXp",cHazardStealth:"hazardStealth",cHazardDisable:"hazardDisable",cHazardTrigger:"hazardTrigger",cHazardEffect:"hazardEffect",cHazardReset:"hazardReset",cSpellAttack:"spellAttack",cSpellDc:"spellDc",cNotes:"notes"};
+const nums=new Set(["level","initiative","maxHp","hp","tempHp","ac","perception","maxActions","focusPoints","fort","ref","will","hazardXp","spellAttack","spellDc"]);
 function renderBuilder(){const c=combatant();if(!c)return;Object.entries(scalarMap).forEach(([id,k])=>$(id).value=c[k]??"");["str","dex","con","int","wis","cha"].forEach(k=>$("c"+k[0].toUpperCase()+k.slice(1)).value=c.abilities[k]??0);
  renderSkills(c);renderItems(c);renderAttacks(c);renderGeneric("actionsEditor",c.actions,"action");renderGeneric("reactionsEditor",c.reactions,"reaction");renderGeneric("abilitiesEditor",c.specialAbilities,"ability");renderSpellSlots(c);renderSpells(c)}
 function removeButton(type,i){return`<button type="button" data-remove="${type}" data-index="${i}">Remove</button>`}
@@ -500,6 +511,21 @@ function parseStatBlock(text){
  c.senses=(raw.match(/Perception\s*[+-]?\d+\s*;?\s*([^\n]*)/i)?.[1]||"").trim();
  const lineValue=label=>lines.find(x=>new RegExp("^"+label+"\\b","i").test(x))?.replace(new RegExp("^"+label+"\\s*","i"),"").trim()||"";
  c.languages=lineValue("Languages");c.speed=lineValue("Speed")||"25 ft.";c.resistances=lineValue("Resistances");c.weaknesses=lineValue("Weaknesses");c.immunities=lineValue("Immunities");
+ c.hazardXp=number(/(\d+)\s*XP\b/i,0);
+ c.hazardStealth=lineValue("Stealth")||lineValue("Detection");
+ c.hazardDisable=lineValue("Disable");
+ c.hazardTrigger=lineValue("Trigger");
+ c.hazardReset=lineValue("Reset");
+ const effectStart=lines.findIndex(x=>/^Effect\b/i.test(x));
+ if(effectStart>=0){
+   const effectLines=[lines[effectStart].replace(/^Effect\s*:?\s*/i,"")];
+   for(let i=effectStart+1;i<lines.length;i++){
+     if(/^(Reset|Routine|Disable|Trigger|Speed|Melee|Ranged|AC|HP|Saves)\b/i.test(lines[i]))break;
+     effectLines.push(lines[i].replace(/^→\s*/,""));
+   }
+   c.hazardEffect=effectLines.filter(Boolean).join(" | ");
+ }
+ if(c.type==="Hazard")c.name=c.name.replace(/^☣️\s*Hazard\s*[–—-]\s*/i,"").trim();
  const ab=raw.match(/Str\s*([+-]?\d+).*?Dex\s*([+-]?\d+).*?Con\s*([+-]?\d+).*?Int\s*([+-]?\d+).*?Wis\s*([+-]?\d+).*?Cha\s*([+-]?\d+)/is);
  if(ab)[c.abilities.str,c.abilities.dex,c.abilities.con,c.abilities.int,c.abilities.wis,c.abilities.cha]=ab.slice(1,7).map(Number);
  const skills=lineValue("Skills");if(skills)c.skills=[...skills.matchAll(/([A-Za-z][A-Za-z ’'-]+?)\s*([+-]\d+)/g)].map(m=>({id:uid(),name:m[1].trim().replace(/,$/,""),modifier:Number(m[2])}));
@@ -523,7 +549,7 @@ function parseStatBlock(text){
 }
 
 let parsedStatBlock=null;
-let previewSectionOrder=["identity","defenses","movement","abilities","skills","items","attacks","actions","reactions","specialAbilities","spellSlots","spells","notes"];
+let previewSectionOrder=["identity","hazardDetails","defenses","movement","abilities","skills","items","attacks","actions","reactions","specialAbilities","spellSlots","spells","notes"];
 const previewSectionLabels={identity:"Identity",defenses:"Defenses",movement:"Movement and Senses",abilities:"Ability Scores",skills:"Skills",items:"Items",attacks:"Attacks",actions:"Actions",reactions:"Reactions",specialAbilities:"Abilities",spellSlots:"Spell Slots",spells:"Spells",notes:"Notes"};
 function movePreviewSection(section,direction){const i=previewSectionOrder.indexOf(section),t=i+direction;if(i<0||t<0||t>=previewSectionOrder.length)return;[previewSectionOrder[i],previewSectionOrder[t]]=[previewSectionOrder[t],previewSectionOrder[i]];renderEditableStatPreview()}
 function removePreviewSection(section){if(!parsedStatBlock)return;const c=parsedStatBlock;if(["skills","items","attacks","actions","reactions","specialAbilities","spellSlots","spells"].includes(section))c[section]=[];else if(section==="notes")c.notes="";else if(section==="movement"){c.speed="";c.senses="";c.languages=""}else if(section==="abilities")c.abilities={str:0,dex:0,con:0,int:0,wis:0,cha:0};else if(section==="defenses"){Object.assign(c,{ac:10,maxHp:0,hp:0,tempHp:0,fort:0,ref:0,will:0,perception:0,resistances:"",weaknesses:"",immunities:""})}renderEditableStatPreview()}
@@ -547,7 +573,7 @@ function bindEditablePreview(){document.querySelectorAll("[data-preview-key]").f
 $("previewStatBlockBtn").onclick=()=>{try{parsedStatBlock=parseStatBlock($("statBlockInput").value);renderEditableStatPreview()}catch(e){parsedStatBlock=null;$("statBlockPreview").textContent=e.message}};
 $("importStatBlockBtn").onclick=()=>{try{const c=parsedStatBlock||parseStatBlock($("statBlockInput").value);c.id=uid();encounter().combatants.push(structuredClone(c));selectedId=c.id;render();tab("builder");toast(`${c.name} imported. Review it before play.`)}catch(e){toast(e.message)}};
 $("clearStatBlockBtn").onclick=()=>{$("statBlockInput").value="";$("statBlockPreview").textContent="Paste a stat block and select Preview Import.";parsedStatBlock=null};
-$("resetPreviewOrderBtn").onclick=()=>{previewSectionOrder=["identity","defenses","movement","abilities","skills","items","attacks","actions","reactions","specialAbilities","spellSlots","spells","notes"];renderEditableStatPreview()};
+$("resetPreviewOrderBtn").onclick=()=>{previewSectionOrder=["identity","hazardDetails","defenses","movement","abilities","skills","items","attacks","actions","reactions","specialAbilities","spellSlots","spells","notes"];renderEditableStatPreview()};
 window.addEventListener("beforeunload",()=>{try{collect();collectNotes();save();saveSimpleInitiative()}catch{}});
 normalizeState();render();previewCreature();$("calculateRunesBtn").click();$("calculateXpBtn").click();
 })();
